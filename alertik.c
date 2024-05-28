@@ -1,0 +1,462 @@
+/*
+ * Alertik: a tiny 'syslog' server & notification tool for Mikrotik routers.
+ * This is free and unencumbered software released into the public domain.
+ */
+
+#define ALERTIK_VERSION "0.1"
+
+#define _POSIX_C_SOURCE 200809L
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <netinet/in.h>
+#include <netdb.h>
+
+#include <curl/curl.h>
+
+#define SYSLOG_PORT 5140
+#define LOG_FILE    "log/log.txt"
+
+/* Uncomment/comment to enable/disable the following settings. */
+#define USE_FILE_AS_LOG           /* stdout if commented. */
+// #define CURL_VERBOSE
+// #define VALIDATE_CERTS
+// #define DISABLE_NOTIFICATIONS
+
+#define panic_errno(s) \
+	do {\
+		log_msg("%s: %s", (s), strerror(errno)); \
+		exit(EXIT_FAILURE); \
+	} while(0);
+
+#define panic(...) \
+	do {\
+		log_msg(__VA_ARGS__); \
+		exit(EXIT_FAILURE); \
+	} while(0);
+
+
+#define MIN(a,b) (((a)<(b))?(a):(b))
+
+#define MSG_MAX  2048
+#define FIFO_MAX   64
+
+/* Telegram & request settings. */
+static char *TELEGRAM_BOT_TOKEN;
+static char *TELEGRAM_CHAT_ID;
+static char *TELEGRAM_NICKNAME;
+
+#define CURL_USER_AGENT "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " \
+                        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+
+/* Circular message buffer. */
+struct log_event {
+	char   msg[MSG_MAX];
+	time_t timestamp;
+};
+
+static struct circ_buffer {
+	int head;
+	int tail;
+	struct log_event log_ev [FIFO_MAX];
+} circ_buffer = {0};
+
+/* Sync. */
+static pthread_mutex_t fifo_mutex        = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t log_mutex         = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t fifo_new_log_entry = PTHREAD_COND_INITIALIZER;
+
+/* Misc. */
+#define LAST_SENT_THRESHOLD_SECS 10  /* Minimum time (in secs) between two */
+static time_t time_last_sent_notify; /* notifications. */
+static int curr_file;
+
+//////////////////////////////// LOGGING //////////////////////////////////////
+
+static inline char *get_formatted_time(time_t time, char *time_str)
+{
+	strftime(
+		time_str,
+		32,
+		"%Y-%m-%d %H:%M:%S",
+		localtime(&time)
+	);
+	return time_str;
+}
+
+/* There should *always* be a corresponding close_log_file() call. */
+static inline void open_log_file(void)
+{
+	struct stat sb;
+
+	pthread_mutex_lock(&log_mutex);
+		if (curr_file == STDOUT_FILENO)
+			return;
+
+		if (stat("log", &sb) < 0)
+			if (mkdir("log", 0755) < 0)
+				return;
+
+		curr_file = openat(AT_FDCWD, LOG_FILE,
+			O_WRONLY|O_CREAT|O_APPEND, 0666);
+
+		if (curr_file < 0)
+			curr_file = STDOUT_FILENO; /* fallback to stdout if can't open. */
+}
+
+/* This should *always* be called *after* a call to open_log_file(). */
+static void close_log_file(void)
+{
+		if (curr_file || curr_file == STDOUT_FILENO)
+			goto out;
+
+		fsync(curr_file);
+		close(curr_file);
+out:
+	pthread_mutex_unlock(&log_mutex);
+}
+
+static inline void log_msg(const char *fmt, ...)
+{
+	char time_str[32] = {0};
+	va_list ap;
+
+	open_log_file();
+		dprintf(curr_file, "[%s] ", get_formatted_time(time(NULL), time_str));
+		va_start(ap, fmt);
+		vdprintf(curr_file, fmt, ap);
+		va_end(ap);
+	close_log_file();
+}
+
+static inline void print_log_event(struct log_event *ev)
+{
+	char time_str[32] = {0};
+	open_log_file();
+		dprintf(curr_file, "\n[%s] %s\n",
+			get_formatted_time(ev->timestamp, time_str), ev->msg);
+	close_log_file();
+}
+
+/////////////////////////////////// NETWORK ///////////////////////////////////
+static int push_msg_into_fifo(const char *msg, time_t timestamp);
+
+static int create_socket(void)
+{
+	struct sockaddr_in svaddr;
+	int yes;
+	int fd;
+
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (fd < 0)
+		panic_errno("Unable to create UDP socket...");
+
+	memset(&svaddr, 0, sizeof(svaddr));
+	svaddr.sin_family      = AF_INET;
+	svaddr.sin_addr.s_addr = INADDR_ANY;
+	svaddr.sin_port = SYSLOG_PORT;
+
+	if (bind(fd, (const struct sockaddr *)&svaddr, sizeof(svaddr)) < 0)
+		panic_errno("Unable to bind...");
+
+	yes = 1;
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void*)&yes,
+		sizeof(yes)) < 0) {
+		panic_errno("Unable to reuse address...");
+	}
+
+	return fd;
+}
+
+static int read_new_upd_msg(int fd)
+{
+	struct sockaddr_storage cli;
+	char msg[MSG_MAX] = {0};
+	socklen_t clilen;
+	ssize_t ret;
+
+	ret = recvfrom(fd, msg, sizeof msg - 1, 0, (struct sockaddr*)&cli,
+		&clilen);
+
+	if (ret < 0)
+		return -1;
+
+	if (push_msg_into_fifo(msg, time(NULL)) < 0)
+		panic("Circular buffer full! (size: %d)\n", FIFO_MAX);
+
+	return 0;
+}
+
+///////////////////////////////// FIFO ////////////////////////////////////////
+
+static int push_msg_into_fifo(const char *msg, time_t timestamp)
+{
+	int next;
+	int head;
+
+	pthread_mutex_lock(&fifo_mutex);
+		head = circ_buffer.head;
+		next = head + 1;
+		if (next >= FIFO_MAX)
+			next = 0;
+
+		if (next == circ_buffer.tail) {
+			pthread_mutex_unlock(&fifo_mutex);
+			return -1;
+		}
+
+		memcpy(circ_buffer.log_ev[head].msg, msg, MSG_MAX);
+		circ_buffer.log_ev[head].timestamp = timestamp;
+
+		circ_buffer.head = next;
+		pthread_cond_signal(&fifo_new_log_entry);
+	pthread_mutex_unlock(&fifo_mutex);
+
+	return 0;
+}
+
+static int pop_msg_from_fifo(struct log_event *ev)
+{
+	int next;
+	int tail;
+
+	pthread_mutex_lock(&fifo_mutex);
+		while (circ_buffer.head == circ_buffer.tail) {
+			pthread_cond_wait(&fifo_new_log_entry, &fifo_mutex);
+		}
+
+		next = circ_buffer.tail + 1;
+		if (next >= FIFO_MAX)
+			next = 0;
+
+		tail = circ_buffer.tail;
+		ev->timestamp = circ_buffer.log_ev[tail].timestamp;
+		memcpy(ev->msg, circ_buffer.log_ev[tail].msg, MSG_MAX);
+
+		circ_buffer.tail = next;
+	pthread_mutex_unlock(&fifo_mutex);
+
+	return 0;
+}
+
+///////////////////////////// MESSAGE HANDLING ////////////////////////////////
+
+/* Just to omit the print to stdout. */
+size_t libcurl_noop_cb(void *ptr, size_t size, size_t nmemb, void *data) {
+	((void)ptr);
+	((void)data);
+	return size * nmemb;
+}
+
+static int send_telegram_notification(const char *msg)
+{
+	char full_request_url[4096] = {0};
+	char *escaped_msg = NULL;
+	CURLcode ret_curl;
+	CURL *hnd;
+	int ret;
+
+	ret = -1;
+
+	hnd = curl_easy_init();
+	if (!hnd) {
+		log_msg("> Unable to initialize libcurl!\n");
+		return ret;
+	}
+
+	log_msg("> Sending notification!\n");
+
+	escaped_msg = curl_easy_escape(hnd, msg, 0);
+	if (!escaped_msg) {
+		log_msg("> Unable to escape notification message...\n");
+		goto error;
+	}
+
+	snprintf(
+		full_request_url,
+		sizeof full_request_url - 1,
+		"https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s",
+		TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, escaped_msg);
+
+	curl_easy_setopt(hnd, CURLOPT_URL, full_request_url);
+	curl_easy_setopt(hnd, CURLOPT_NOPROGRESS,    1L);
+	curl_easy_setopt(hnd, CURLOPT_USERAGENT, CURL_USER_AGENT);
+	curl_easy_setopt(hnd, CURLOPT_MAXREDIRS,     3L);
+	curl_easy_setopt(hnd, CURLOPT_TCP_KEEPALIVE, 1L);
+	curl_easy_setopt(hnd, CURLOPT_WRITEFUNCTION, libcurl_noop_cb);
+#ifdef CURL_VERBOSE
+	curl_easy_setopt(hnd, CURLOPT_VERBOSE, 1L);
+#endif
+#ifndef VALIDATE_CERTS
+	curl_easy_setopt(hnd, CURLOPT_SSL_VERIFYPEER, 0L);
+#endif
+
+#ifndef DISABLE_NOTIFICATIONS
+	ret_curl = curl_easy_perform(hnd);
+	if (ret_curl != CURLE_OK) {
+		log_msg("> Unable to send request!\n");
+		goto error;
+	} else {
+		time_last_sent_notify = time(NULL); /* Update the time of our last sent */
+		log_msg("> Done!\n");               /* notification. */
+	}
+#endif
+
+	ret = 0;
+error:
+	curl_free(escaped_msg);
+	curl_easy_cleanup(hnd);
+	return ret;
+}
+
+///////////////////////////// FAILED LOGIN ATTEMPTS
+static int
+parse_login_attempt_msg(const char *msg, char *wifi_iface, char *mac_addr)
+{
+	size_t len = strlen(msg);
+	size_t tmp = 0;
+	size_t at  = 0;
+
+	/* Find '@' and the last ' '. */
+	for (at = 0; at < len && msg[at] != '@'; at++) {
+		if (msg[at] == ' ')
+			tmp = at;
+	}
+
+	if (at == len || !tmp) {
+		log_msg("unable to additional data, ignoring...\n");
+		return -1;
+	}
+
+	memcpy(mac_addr, msg + tmp + 1, MIN(at - tmp - 1, 32));
+
+	/*
+	 * Find network name.
+	 * Assuming that the interface name does not have ':'...
+	 */
+	for (tmp = at + 1; tmp < len && msg[tmp] != ':'; tmp++);
+	if (tmp == len) {
+		log_msg("unable to find interface name!, ignoring..\n");
+		return -1;
+	}
+
+	memcpy(wifi_iface, msg + at + 1, MIN(tmp - at - 1, 32));
+	return (0);
+}
+
+static void handle_wifi_login_attempts(struct log_event *ev)
+{
+	char time_str[32]   = {0};
+	char mac_addr[32]   = {0};
+	char wifi_iface[32] = {0};
+	char notification_message[2048] = {0};
+
+	log_msg("> Login attempt detected!\n");
+
+	if ((time(NULL) - time_last_sent_notify) <= LAST_SENT_THRESHOLD_SECS) {
+		log_msg("ignoring, reason: too many notifications!\n");
+		return;
+	}
+
+	if (parse_login_attempt_msg(ev->msg, wifi_iface, mac_addr) < 0)
+		return;
+
+	/* Send our notification. */
+	snprintf(
+		notification_message,
+		sizeof notification_message - 1,
+		"%s! %s!, there is someone trying to connect "
+		"to your WiFi: %s, with the mac-address: %s, at:%s",
+		TELEGRAM_NICKNAME, TELEGRAM_NICKNAME,
+		wifi_iface,
+		mac_addr,
+		get_formatted_time(ev->timestamp, time_str)
+	);
+
+	log_msg("> Retrieved info, MAC: (%s), Interface: (%s)\n", mac_addr, wifi_iface);
+
+	if (send_telegram_notification(notification_message) < 0) {
+		log_msg("unable to send the notification!\n");
+		return;
+	}
+}
+
+/* Handlers. */
+static struct ev_handlers {
+	const char *str;
+	void(*hnd)(struct log_event *);
+} handlers[] = {
+	{"unicast key exchange timeout", handle_wifi_login_attempts},
+	/* Add new handlers here. */
+};
+
+static void *handle_messages(void *p)
+{
+	((void)p);
+	size_t i;
+	size_t num_handlers;
+	struct log_event ev = {0};
+
+	num_handlers = sizeof(handlers)/sizeof(handlers[0]);
+
+	while (pop_msg_from_fifo(&ev) >= 0) {
+		print_log_event(&ev);
+
+		/* Check if it belongs to any of our desired events. */
+		for (i = 0; i < num_handlers; i++) {
+			if (strstr(ev.msg, handlers[i].str)) {
+				handlers[i].hnd(&ev);
+				break;
+			}
+		}
+
+		if (i == num_handlers)
+			log_msg("> No match!\n");
+	}
+
+	return NULL;
+}
+
+int main(void)
+{
+	pthread_t handler;
+	int fd;
+
+	atexit(close_log_file);
+
+	TELEGRAM_BOT_TOKEN = getenv("TELEGRAM_BOT_TOKEN");
+	TELEGRAM_CHAT_ID   = getenv("TELEGRAM_CHAT_ID");
+	TELEGRAM_NICKNAME  = getenv("TELEGRAM_NICKNAME");
+
+	if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID || !TELEGRAM_NICKNAME) {
+		panic("Unable to find env vars, please check if you have all of the\n"
+			"following set:\n"
+			"- TELEGRAM_BOT_TOKEN\n"
+			"- TELEGRAM_CHAT_ID\n"
+			"- TELEGRAM_NICKNAME\n");
+	}
+
+#ifndef USE_FILE_AS_LOG
+	curr_file = STDOUT_FILENO;
+#endif
+
+	log_msg("Alertik v%s started...\n", ALERTIK_VERSION);
+
+	fd = create_socket();
+	if (pthread_create(&handler, NULL, handle_messages, NULL))
+		panic_errno("Unable to create hanler thread!");
+
+	log_msg("Waiting for messages...\n");
+
+	while (read_new_upd_msg(fd) >= 0);
+	return (EXIT_SUCCESS);
+}
