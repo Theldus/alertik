@@ -27,7 +27,7 @@
 #define LOG_FILE    "log/log.txt"
 
 /* Uncomment/comment to enable/disable the following settings. */
-#define USE_FILE_AS_LOG           /* stdout if commented. */
+// #define USE_FILE_AS_LOG           /* stdout if commented. */
 // #define CURL_VERBOSE
 // #define VALIDATE_CERTS
 // #define DISABLE_NOTIFICATIONS
@@ -437,17 +437,17 @@ int main(void)
 	TELEGRAM_CHAT_ID   = getenv("TELEGRAM_CHAT_ID");
 	TELEGRAM_NICKNAME  = getenv("TELEGRAM_NICKNAME");
 
+#ifndef USE_FILE_AS_LOG
+	curr_file = STDOUT_FILENO;
+#endif
+
 	if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID || !TELEGRAM_NICKNAME) {
-		panic("Unable to find env vars, please check if you have all of the\n"
+		panic("Unable to find env vars, please check if you have all of the"
 			"following set:\n"
 			"- TELEGRAM_BOT_TOKEN\n"
 			"- TELEGRAM_CHAT_ID\n"
 			"- TELEGRAM_NICKNAME\n");
 	}
-
-#ifndef USE_FILE_AS_LOG
-	curr_file = STDOUT_FILENO;
-#endif
 
 	log_msg("Alertik v%s started...\n", ALERTIK_VERSION);
 
