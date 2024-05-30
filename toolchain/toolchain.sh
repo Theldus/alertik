@@ -5,6 +5,8 @@
 # This is free and unencumbered software released into the public domain.
 #
 
+set -e
+
 # Backup current folder
 pushd .
 export CURDIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -48,13 +50,15 @@ download_build_libcurl() {
 
 	echo "[+] Building cURL ..."
 	cd curl*/
-	mkdir build && cd build/
+	mkdir -p build && cd build/
 	../configure \
 		--prefix="$MUSL_PREFIX" \
 		--target=armv6-linux-musleabi \
 		--host=armv6-linux-musleabi \
 		--build=x86_64-linux-gnu \
 		--with-bearssl \
+		--without-zlib \
+		--without-brotli \
 		--disable-ipv6 \
 		--disable-ftp \
 		--disable-gopher \
@@ -67,7 +71,24 @@ download_build_libcurl() {
 		--disable-smtp \
 		--disable-telnet \
 		--disable-tftp \
-		--disable-hsts
+		--disable-hsts \
+		--disable-largefile \
+		--disable-dependency-tracking \
+		--disable-shared \
+		--disable-proxy \
+		--disable-dict \
+		--disable-file \
+		--disable-unix-sockets \
+		--disable-alt-svc \
+		--disable-manual \
+		--disable-docs \
+		--disable-libcurl-option \
+		--disable-sspi \
+		--disable-progress-meter \
+		--disable-netrc \
+		--disable-dateparse \
+		--disable-mime \
+		--enable-pthreads
 
 	make -j$(nproc)
 	make install
