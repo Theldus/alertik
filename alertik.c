@@ -442,21 +442,24 @@ int main(void)
 #endif
 
 	if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID || !TELEGRAM_NICKNAME) {
-		panic("Unable to find env vars, please check if you have all of the"
+		panic("Unable to find env vars, please check if you have all of the "
 			"following set:\n"
 			"- TELEGRAM_BOT_TOKEN\n"
 			"- TELEGRAM_CHAT_ID\n"
 			"- TELEGRAM_NICKNAME\n");
 	}
 
-	log_msg("Alertik v%s started...\n", ALERTIK_VERSION);
+	log_msg(
+		"Alertik (" GIT_HASH ") (built at " __DATE__ " " __TIME__ ")\n");
+	log_msg("     (https://github.com/Theldus/alertik)\n");
+	log_msg("-------------------------------------------------\n");
 
 	fd = create_socket();
 	if (pthread_create(&handler, NULL, handle_messages, NULL))
 		panic_errno("Unable to create hanler thread!");
 
-	log_msg("Waiting for messages...\n");
+	log_msg("Waiting for messages at :%d (UDP)...\n", SYSLOG_PORT);
 
 	while (read_new_upd_msg(fd) >= 0);
-	return (EXIT_SUCCESS);
+	return EXIT_SUCCESS;
 }

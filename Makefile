@@ -7,6 +7,7 @@ CC      ?= cc
 CFLAGS  += -Wall -Wextra
 LDLIBS  += -pthread -lcurl
 STRIP    = strip
+VERSION  = v0.1
 
 ifeq ($(LOG_FILE),yes)
 	CFLAGS += -DUSE_FILE_AS_LOG
@@ -22,6 +23,11 @@ ifneq ($(CROSS),)
 	LDLIBS  += -lbearssl
 	LDFLAGS += -no-pie --static
 endif
+
+GIT_HASH=$(shell git rev-parse --short HEAD 2>/dev/null || echo '$(VERSION)')
+CFLAGS += -DGIT_HASH=\"$(GIT_HASH)\"
+
+.PHONY: all clean
 
 all: alertik Makefile
 	$(STRIP) --strip-all alertik
