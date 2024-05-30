@@ -16,7 +16,9 @@ endif
 ifneq ($(CROSS),)
 	CC       = $(CROSS)-linux-musleabi-gcc
 	STRIP    = $(CROSS)-linux-musleabi-strip
-	CFLAGS  += -DUSE_FILE_AS_LOG # We don't have stdout...
+	ifeq ($(LOG_FILE),)
+		CFLAGS  += -DUSE_FILE_AS_LOG # We don't have stdout...
+	endif
 	LDLIBS  += -lbearssl
 	LDFLAGS += -no-pie --static
 endif
