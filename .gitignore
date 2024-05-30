@@ -1,2 +1,12 @@
 alertik
 alertik.o
+toolchain/armv6-linux-musleabi-cross
+toolchain/BearSSL
+toolchain/curl-8.8.0
+toolchain/armv6-musl.tgz
+toolchain/curl.tar.xz
+log/
+log.txt
+*~
+*.swp
+*.swo
