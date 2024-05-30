@@ -114,6 +114,8 @@ build_alertik_armv6() {
 	file alertik
 	echo "[+] File size:"
 	ls -lah alertik
+	echo "[+] File hash:"
+	sha256sum alertik
 }
 
 # Dispatcher
