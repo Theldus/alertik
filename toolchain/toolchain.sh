@@ -97,4 +97,5 @@ elif [ "$1" == "build_alertik_armv6" ]; then
 	build_alertik_armv6
 else
 	echo "No option found!"
+	exit 1
 fi

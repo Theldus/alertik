@@ -5,10 +5,6 @@
 
 name: CI
 
-env:
-  CTEST_OUTPUT_ON_FAILURE: 1
-  TRAVIS: 1
-
 on:
   push:
     branches: [ "master" ]
@@ -30,4 +26,4 @@ jobs:
     - name: Download & build libcurl for armv6
       run:  toolchain/toolchain.sh "download_build_libcurl"
     - name: Build Alertik for armv6
-      run:  toolchain/toolchain.sh "do_build_armv6"
+      run:  toolchain/toolchain.sh "build_alertik_armv6"
