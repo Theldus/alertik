@@ -51,6 +51,8 @@ download_build_libcurl() {
 	echo "[+] Building cURL ..."
 	cd curl*/
 	mkdir -p build && cd build/
+	export CFLAGS="-Os -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables -flto"
+	export LDFLAGS="-Wl,-s -Wl,-Bsymbolic -Wl,--gc-sections"
 	../configure \
 		--prefix="$MUSL_PREFIX" \
 		--target=armv6-linux-musleabi \
@@ -58,7 +60,13 @@ download_build_libcurl() {
 		--build=x86_64-linux-gnu \
 		--with-bearssl \
 		--without-zlib \
+		--without-zstd \
 		--without-brotli \
+		--without-librtmp \
+		--disable-headers-api \
+		--disable-verbose \
+		--disable-http-auth \
+		--disable-cookies \
 		--disable-ipv6 \
 		--disable-ftp \
 		--disable-gopher \
@@ -72,6 +80,7 @@ download_build_libcurl() {
 		--disable-telnet \
 		--disable-tftp \
 		--disable-hsts \
+		--disable-doh \
 		--disable-largefile \
 		--disable-dependency-tracking \
 		--disable-shared \
