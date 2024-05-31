@@ -32,7 +32,7 @@ CFLAGS += -DGIT_HASH=\"$(GIT_HASH)\"
 all: alertik Makefile
 	$(STRIP) --strip-all alertik
 
-alertik: alertik.o
+alertik: alertik.o events.o
 
 clean:
-	rm -f alertik.o alertik
+	rm -f alertik.o events.o alertik

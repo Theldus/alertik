@@ -1,5 +1,5 @@
 alertik
-alertik.o
+*.o
 toolchain/armv6-linux-musleabi-cross
 toolchain/BearSSL
 toolchain/curl-8.8.0

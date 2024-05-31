@@ -3,8 +3,6 @@
  * This is free and unencumbered software released into the public domain.
  */
 
-#define ALERTIK_VERSION "0.1"
-
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
@@ -23,8 +21,8 @@
 
 #include <curl/curl.h>
 
-#define SYSLOG_PORT 5140
-#define LOG_FILE    "log/log.txt"
+#include "alertik.h"
+#include "events.h"
 
 /* Uncomment/comment to enable/disable the following settings. */
 // #define USE_FILE_AS_LOG           /* stdout if commented. */
@@ -32,38 +30,19 @@
 // #define VALIDATE_CERTS
 // #define DISABLE_NOTIFICATIONS
 
-#define panic_errno(s) \
-	do {\
-		log_msg("%s: %s", (s), strerror(errno)); \
-		exit(EXIT_FAILURE); \
-	} while(0);
-
-#define panic(...) \
-	do {\
-		log_msg(__VA_ARGS__); \
-		exit(EXIT_FAILURE); \
-	} while(0);
-
-
-#define MIN(a,b) (((a)<(b))?(a):(b))
-
-#define MSG_MAX  2048
-#define FIFO_MAX   64
+#define FIFO_MAX    64
+#define SYSLOG_PORT 5140
+#define LOG_FILE    "log/log.txt"
 
 /* Telegram & request settings. */
 static char *TELEGRAM_BOT_TOKEN;
 static char *TELEGRAM_CHAT_ID;
-static char *TELEGRAM_NICKNAME;
+char *TELEGRAM_NICKNAME;
 
 #define CURL_USER_AGENT "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " \
                         "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 
 /* Circular message buffer. */
-struct log_event {
-	char   msg[MSG_MAX];
-	time_t timestamp;
-};
-
 static struct circ_buffer {
 	int head;
 	int tail;
@@ -81,17 +60,6 @@ static time_t time_last_sent_notify; /* notifications. */
 static int curr_file;
 
 //////////////////////////////// LOGGING //////////////////////////////////////
-
-static inline char *get_formatted_time(time_t time, char *time_str)
-{
-	strftime(
-		time_str,
-		32,
-		"%Y-%m-%d %H:%M:%S",
-		localtime(&time)
-	);
-	return time_str;
-}
 
 /* There should *always* be a corresponding close_log_file() call. */
 static inline void open_log_file(void)
@@ -125,7 +93,18 @@ out:
 	pthread_mutex_unlock(&log_mutex);
 }
 
-static inline void log_msg(const char *fmt, ...)
+char *get_formatted_time(time_t time, char *time_str)
+{
+	strftime(
+		time_str,
+		32,
+		"%Y-%m-%d %H:%M:%S",
+		localtime(&time)
+	);
+	return time_str;
+}
+
+void log_msg(const char *fmt, ...)
 {
 	char time_str[32] = {0};
 	va_list ap;
@@ -257,7 +236,7 @@ size_t libcurl_noop_cb(void *ptr, size_t size, size_t nmemb, void *data) {
 	return size * nmemb;
 }
 
-static int send_telegram_notification(const char *msg)
+int send_telegram_notification(const char *msg)
 {
 	char full_request_url[4096] = {0};
 	char *escaped_msg = NULL;
@@ -318,111 +297,31 @@ error:
 	return ret;
 }
 
-///////////////////////////// FAILED LOGIN ATTEMPTS
-static int
-parse_login_attempt_msg(const char *msg, char *wifi_iface, char *mac_addr)
-{
-	size_t len = strlen(msg);
-	size_t tmp = 0;
-	size_t at  = 0;
-
-	/* Find '@' and the last ' '. */
-	for (at = 0; at < len && msg[at] != '@'; at++) {
-		if (msg[at] == ' ')
-			tmp = at;
-	}
-
-	if (at == len || !tmp) {
-		log_msg("unable to additional data, ignoring...\n");
-		return -1;
-	}
-
-	memcpy(mac_addr, msg + tmp + 1, MIN(at - tmp - 1, 32));
-
-	/*
-	 * Find network name.
-	 * Assuming that the interface name does not have ':'...
-	 */
-	for (tmp = at + 1; tmp < len && msg[tmp] != ':'; tmp++);
-	if (tmp == len) {
-		log_msg("unable to find interface name!, ignoring..\n");
-		return -1;
-	}
-
-	memcpy(wifi_iface, msg + at + 1, MIN(tmp - at - 1, 32));
-	return (0);
-}
-
-static void handle_wifi_login_attempts(struct log_event *ev)
-{
-	char time_str[32]   = {0};
-	char mac_addr[32]   = {0};
-	char wifi_iface[32] = {0};
-	char notification_message[2048] = {0};
-
-	log_msg("> Login attempt detected!\n");
-
-	if ((time(NULL) - time_last_sent_notify) <= LAST_SENT_THRESHOLD_SECS) {
-		log_msg("ignoring, reason: too many notifications!\n");
-		return;
-	}
-
-	if (parse_login_attempt_msg(ev->msg, wifi_iface, mac_addr) < 0)
-		return;
-
-	/* Send our notification. */
-	snprintf(
-		notification_message,
-		sizeof notification_message - 1,
-		"%s! %s!, there is someone trying to connect "
-		"to your WiFi: %s, with the mac-address: %s, at:%s",
-		TELEGRAM_NICKNAME, TELEGRAM_NICKNAME,
-		wifi_iface,
-		mac_addr,
-		get_formatted_time(ev->timestamp, time_str)
-	);
-
-	log_msg("> Retrieved info, MAC: (%s), Interface: (%s)\n", mac_addr, wifi_iface);
-
-	if (send_telegram_notification(notification_message) < 0) {
-		log_msg("unable to send the notification!\n");
-		return;
-	}
-}
-
-/* Handlers. */
-static struct ev_handlers {
-	const char *str;
-	void(*hnd)(struct log_event *);
-} handlers[] = {
-	{"unicast key exchange timeout", handle_wifi_login_attempts},
-	/* Add new handlers here. */
-};
-
 static void *handle_messages(void *p)
 {
 	((void)p);
 	size_t i;
-	size_t num_handlers;
 	struct log_event ev = {0};
-
-	num_handlers = sizeof(handlers)/sizeof(handlers[0]);
 
 	while (pop_msg_from_fifo(&ev) >= 0) {
 		print_log_event(&ev);
 
+		if ((time(NULL) - time_last_sent_notify) <= LAST_SENT_THRESHOLD_SECS) {
+			log_msg("ignoring, reason: too many notifications!\n");
+			continue;
+		}
+
 		/* Check if it belongs to any of our desired events. */
-		for (i = 0; i < num_handlers; i++) {
+		for (i = 0; i < NUM_EVENTS; i++) {
 			if (strstr(ev.msg, handlers[i].str)) {
 				handlers[i].hnd(&ev);
 				break;
 			}
 		}
 
-		if (i == num_handlers)
+		if (i == NUM_EVENTS)
 			log_msg("> No match!\n");
 	}
-
 	return NULL;
 }
 
