@@ -194,17 +194,16 @@ $ docker buildx build --platform linux/arm/v6,linux/arm/v7,linux/arm64 . --tag t
 WARNING: No output specified with docker-container driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load
 ```
 
-## Security Note
-Running a Docker image on your router is a potential security risk, and you should not blindly trust pre-built Docker images, especially for sensitive devices like routers. For this reason, all Docker images provided in this repository are pushed to Dockerhub via GitHub Actions. This means you can audit the entire process from start to finish and ensure that the downloaded Docker images are exactly as specified.
+## Security Notice
+Running a Docker image on your router can be a cause for concern. It is not advisable to blindly trust readily available Docker images, especially when it comes to sensitive devices like routers. With this in mind, all Docker images provided in this repository are exclusively pushed to Dockerhub via Github Actions. This means you can audit the entire process from start to finish, ensuring that the downloaded Docker images are exactly as they claim to be.
 
-Incidents like the libxz case should not be repeated, and manual uploads of binaries or source code should not be trusted when there are available alternatives.
+Incidents like the one involving libxz must not be repeated. Trust should not be placed in manual uploads, whether of binaries or source code, when there are available alternatives.
 
 ## Contributing
 Alertik is always open to the community and willing to accept contributions, whether with issues, documentation, testing, new features, bugfixes, typos, and etc. Welcome aboard.
 
 ## License
 Alertik is a public domain project licensed under Unlicense.
-
 
 [theldus/alertik:latest]: https://hub.docker.com/repository/docker/theldus/alertik/tags
 [buildx]: https://github.com/docker/buildx
