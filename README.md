@@ -4,6 +4,11 @@
 
 Alertik is a tiny syslog server and event notifier designed for MikroTik routers.
 
+https://github.com/Theldus/alertik/assets/8294550/7963be36-268a-458e-9b79-83a466aa85be
+<p align="center">
+<i>Receiving Telegram notification due to failed WiFi login</i>
+</p>
+
 ## The Problem
 MikroTik routers are impressive devices, capable of performing numerous tasks on small, compact, and affordable hardware. However, there is always room for improvement, and certain missing features can leave users feeling restricted. One such limitation is related to logging: RouterOS logs *a lot* of useful information, but it provides *no* means to trigger events based on these logs, which can be quite limiting for users.
 
