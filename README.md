@@ -6,7 +6,7 @@ Alertik is a tiny syslog server and event notifier designed for MikroTik routers
 
 https://github.com/Theldus/alertik/assets/8294550/7963be36-268a-458e-9b79-83a466aa85be
 <p align="center">
-<i>Receiving Telegram notification due to failed WiFi login</i>
+<i>Receiving Telegram notification due to failed WiFi login attempt</i>
 </p>
 
 ## The Problem
