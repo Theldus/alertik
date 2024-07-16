@@ -19,28 +19,17 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#include <curl/curl.h>
-
 #include "alertik.h"
 #include "events.h"
+#include "env_events.h"
+#include "notifiers.h"
 
 /* Uncomment/comment to enable/disable the following settings. */
 // #define USE_FILE_AS_LOG           /* stdout if commented. */
-// #define CURL_VERBOSE
-// #define VALIDATE_CERTS
-// #define DISABLE_NOTIFICATIONS
 
 #define FIFO_MAX    64
 #define SYSLOG_PORT 5140
 #define LOG_FILE    "log/log.txt"
-
-/* Telegram & request settings. */
-static char *TELEGRAM_BOT_TOKEN;
-static char *TELEGRAM_CHAT_ID;
-char *TELEGRAM_NICKNAME;
-
-#define CURL_USER_AGENT "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " \
-                        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 
 /* Circular message buffer. */
 static struct circ_buffer {
@@ -56,7 +45,7 @@ static pthread_cond_t fifo_new_log_entry = PTHREAD_COND_INITIALIZER;
 
 /* Misc. */
 #define LAST_SENT_THRESHOLD_SECS 10  /* Minimum time (in secs) between two */
-static time_t time_last_sent_notify; /* notifications. */
+time_t time_last_sent_notify; /* notifications. */
 static int curr_file;
 
 //////////////////////////////// LOGGING //////////////////////////////////////
@@ -228,75 +217,6 @@ static int pop_msg_from_fifo(struct log_event *ev)
 }
 
 ///////////////////////////// MESSAGE HANDLING ////////////////////////////////
-
-/* Just to omit the print to stdout. */
-size_t libcurl_noop_cb(void *ptr, size_t size, size_t nmemb, void *data) {
-	((void)ptr);
-	((void)data);
-	return size * nmemb;
-}
-
-int send_telegram_notification(const char *msg)
-{
-	char full_request_url[4096] = {0};
-	char *escaped_msg = NULL;
-	CURLcode ret_curl;
-	CURL *hnd;
-	int ret;
-
-	ret = -1;
-
-	hnd = curl_easy_init();
-	if (!hnd) {
-		log_msg("> Unable to initialize libcurl!\n");
-		return ret;
-	}
-
-	log_msg("> Sending notification!\n");
-
-	escaped_msg = curl_easy_escape(hnd, msg, 0);
-	if (!escaped_msg) {
-		log_msg("> Unable to escape notification message...\n");
-		goto error;
-	}
-
-	snprintf(
-		full_request_url,
-		sizeof full_request_url - 1,
-		"https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s",
-		TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, escaped_msg);
-
-	curl_easy_setopt(hnd, CURLOPT_URL, full_request_url);
-	curl_easy_setopt(hnd, CURLOPT_NOPROGRESS,    1L);
-	curl_easy_setopt(hnd, CURLOPT_USERAGENT, CURL_USER_AGENT);
-	curl_easy_setopt(hnd, CURLOPT_MAXREDIRS,     3L);
-	curl_easy_setopt(hnd, CURLOPT_TCP_KEEPALIVE, 1L);
-	curl_easy_setopt(hnd, CURLOPT_WRITEFUNCTION, libcurl_noop_cb);
-#ifdef CURL_VERBOSE
-	curl_easy_setopt(hnd, CURLOPT_VERBOSE, 1L);
-#endif
-#ifndef VALIDATE_CERTS
-	curl_easy_setopt(hnd, CURLOPT_SSL_VERIFYPEER, 0L);
-#endif
-
-#ifndef DISABLE_NOTIFICATIONS
-	ret_curl = curl_easy_perform(hnd);
-	if (ret_curl != CURLE_OK) {
-		log_msg("> Unable to send request!\n");
-		goto error;
-	} else {
-		time_last_sent_notify = time(NULL); /* Update the time of our last sent */
-		log_msg("> Done!\n");               /* notification. */
-	}
-#endif
-
-	ret = 0;
-error:
-	curl_free(escaped_msg);
-	curl_easy_cleanup(hnd);
-	return ret;
-}
-
 static void *handle_messages(void *p)
 {
 	((void)p);
@@ -332,21 +252,12 @@ int main(void)
 
 	atexit(close_log_file);
 
-	TELEGRAM_BOT_TOKEN = getenv("TELEGRAM_BOT_TOKEN");
-	TELEGRAM_CHAT_ID   = getenv("TELEGRAM_CHAT_ID");
-	TELEGRAM_NICKNAME  = getenv("TELEGRAM_NICKNAME");
-
 #ifndef USE_FILE_AS_LOG
 	curr_file = STDOUT_FILENO;
 #endif
 
-	if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID || !TELEGRAM_NICKNAME) {
-		panic("Unable to find env vars, please check if you have all of the "
-			"following set:\n"
-			"- TELEGRAM_BOT_TOKEN\n"
-			"- TELEGRAM_CHAT_ID\n"
-			"- TELEGRAM_NICKNAME\n");
-	}
+	setup_notifiers();
+	init_environment_events();
 
 	log_msg(
 		"Alertik (" GIT_HASH ") (built at " __DATE__ " " __TIME__ ")\n");

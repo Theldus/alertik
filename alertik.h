@@ -8,6 +8,7 @@
 
 	#include <stdarg.h>
 	#include <stdlib.h>
+	#include <time.h>
 
 	#define panic_errno(s) \
 		do {\
@@ -23,7 +24,7 @@
 
 	#define MIN(a,b) (((a)<(b))?(a):(b))
 
-	extern char *TELEGRAM_NICKNAME;
+	extern time_t time_last_sent_notify;
 	extern char *get_formatted_time(time_t time, char *time_str);
 	extern void log_msg(const char *fmt, ...);
 	extern int  send_telegram_notification(const char *msg);
