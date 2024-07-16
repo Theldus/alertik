@@ -8,6 +8,7 @@ CFLAGS  += -Wall -Wextra
 LDLIBS  += -pthread -lcurl
 STRIP    = strip
 VERSION  = v0.1
+OBJS     = alertik.o events.o env_events.o notifiers.o
 
 ifeq ($(LOG_FILE),yes)
 	CFLAGS += -DUSE_FILE_AS_LOG
@@ -32,7 +33,7 @@ CFLAGS += -DGIT_HASH=\"$(GIT_HASH)\"
 all: alertik Makefile
 	$(STRIP) --strip-all alertik
 
-alertik: alertik.o events.o
+alertik: $(OBJS)
 
 clean:
-	rm -f alertik.o events.o alertik
+	rm -f $(OBJS) alertik

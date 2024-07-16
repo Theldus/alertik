@@ -72,9 +72,8 @@ void handle_wifi_login_attempts(struct log_event *ev)
 	snprintf(
 		notification_message,
 		sizeof notification_message - 1,
-		"%s! %s!, there is someone trying to connect "
+		"There is someone trying to connect "
 		"to your WiFi: %s, with the mac-address: %s, at:%s",
-		TELEGRAM_NICKNAME, TELEGRAM_NICKNAME,
 		wifi_iface,
 		mac_addr,
 		get_formatted_time(ev->timestamp, time_str)
