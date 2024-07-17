@@ -30,10 +30,10 @@ static inline void open_log_file(void)
 		if (curr_file == STDOUT_FILENO)
 			return;
 
-		if (stat("log", &sb) < 0)
+		if (stat("log", &sb) < 0) {
 			if (mkdir("log", 0755) < 0)
 				return;
-
+		}
 		curr_file = openat(AT_FDCWD, LOG_FILE,
 			O_WRONLY|O_CREAT|O_APPEND, 0666);
 
@@ -46,7 +46,6 @@ static void close_log_file(void)
 {
 		if (curr_file || curr_file == STDOUT_FILENO)
 			goto out;
-
 		fsync(curr_file);
 		close(curr_file);
 out:
