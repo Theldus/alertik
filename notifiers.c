@@ -3,14 +3,12 @@
  * This is free and unencumbered software released into the public domain.
  */
 
-#include <ctype.h>
-#include <errno.h>
-#include <limits.h>
 #include <stdio.h>
-#include <string.h>
-
+#include <stdlib.h>
+#include <time.h>
 #include <curl/curl.h>
 
+#include "log.h"
 #include "notifiers.h"
 #include "alertik.h"
 
