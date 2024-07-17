@@ -6,7 +6,10 @@
 #ifndef LOG_H
 #define LOG_H
 
-	#include "events.h"
+	#include <errno.h>
+	#include <stdlib.h>
+	#include <sys/types.h>
+	struct log_event;
 
 	/* Uncomment/comment to enable/disable the following settings. */
 	// #define USE_FILE_AS_LOG           /* stdout if commented. */

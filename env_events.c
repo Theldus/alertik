@@ -7,7 +7,10 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+#include "log.h"
 #include "env_events.h"
 #include "alertik.h"
 #include "notifiers.h"

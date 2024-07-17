@@ -6,8 +6,6 @@
 #ifndef ENV_EVENTS_H
 #define ENV_EVENTS_H
 
-	#include "events.h"
-
 	#define MAX_ENV_EVENTS  16
 
 	struct env_event {

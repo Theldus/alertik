@@ -6,8 +6,6 @@
 #ifndef ALERTIK_H
 #define ALERTIK_H
 
-	#include <stdarg.h>
-	#include <stdlib.h>
 	#include <time.h>
 
 	#define MIN(a,b) (((a)<(b))?(a):(b))

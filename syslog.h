@@ -6,6 +6,8 @@
 #ifndef SYSLOG_H
 #define SYSLOG_H
 
+	struct log_event;
+
 	#define FIFO_MAX    64
 	#define SYSLOG_PORT 5140
 
