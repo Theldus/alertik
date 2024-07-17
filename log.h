@@ -6,8 +6,22 @@
 #ifndef LOG_H
 #define LOG_H
 
+	#include "events.h"
+
 	/* Uncomment/comment to enable/disable the following settings. */
 	// #define USE_FILE_AS_LOG           /* stdout if commented. */
+
+	#define panic_errno(s) \
+		do {\
+			log_msg("%s: %s", (s), strerror(errno)); \
+			exit(EXIT_FAILURE); \
+		} while(0);
+
+	#define panic(...) \
+		do {\
+			log_msg(__VA_ARGS__); \
+			exit(EXIT_FAILURE); \
+		} while(0);
 
 	#define LOG_FILE "log/log.txt"
 

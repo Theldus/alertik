@@ -10,18 +10,6 @@
 	#include <stdlib.h>
 	#include <time.h>
 
-	#define panic_errno(s) \
-		do {\
-			log_msg("%s: %s", (s), strerror(errno)); \
-			exit(EXIT_FAILURE); \
-		} while(0);
-
-	#define panic(...) \
-		do {\
-			log_msg(__VA_ARGS__); \
-			exit(EXIT_FAILURE); \
-		} while(0);
-
 	#define MIN(a,b) (((a)<(b))?(a):(b))
 
 	extern time_t time_last_sent_notify;
