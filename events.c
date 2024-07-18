@@ -21,6 +21,29 @@ struct ev_handler handlers[NUM_EVENTS] = {
 	/* Add new handlers here. */
 };
 
+/**
+ * @brief Given an event, checks if it belongs to one of the
+ * registered events and then, handle it.
+ *
+ * @param ev Event to be processed.
+ *
+ * @return Returns the amount of matches, 0 if none (not handled).
+ */
+int process_static_event(struct log_event *ev)
+{
+	int i;
+	int handled;
+
+	for (i = 0, handled = 0; i < NUM_EVENTS; i++) {
+		if (strstr(ev->msg, handlers[i].str)) {
+			handlers[i].hnd(ev);
+			handled += 1;
+		}
+	}
+	return handled;
+}
+
+
 ///////////////////////////// FAILED LOGIN ATTEMPTS ///////////////////////////
 static int
 parse_login_attempt_msg(const char *msg, char *wifi_iface, char *mac_addr)

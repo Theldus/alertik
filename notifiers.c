@@ -12,11 +12,28 @@
 #include "notifiers.h"
 #include "alertik.h"
 
+/*
+ * Notification handling/notifiers
+ */
+
+/* EPOCH in secs of last sent notification. */
+static time_t time_last_sent_notify;
+
 /* Just to omit the print to stdout. */
 size_t libcurl_noop_cb(void *ptr, size_t size, size_t nmemb, void *data) {
 	((void)ptr);
 	((void)data);
 	return size * nmemb;
+}
+
+/**/
+void update_notify_last_sent(void) {
+	time_last_sent_notify = time(NULL);
+}
+
+/**/
+int is_within_notify_threshold(void) {
+	return (time(NULL) - time_last_sent_notify) > LAST_SENT_THRESHOLD_SECS;
 }
 
 //////////////////////////////// TELEGRAM //////////////////////////////////////
@@ -26,6 +43,10 @@ static char *telegram_chat_id;
 
 void setup_telegram(void)
 {
+	static int setup = 0;
+	if (setup)
+		return;
+
 	telegram_bot_token = getenv("TELEGRAM_BOT_TOKEN");
 	telegram_chat_id   = getenv("TELEGRAM_CHAT_ID");
 	if (!telegram_bot_token || !telegram_chat_id) {
@@ -36,6 +57,7 @@ void setup_telegram(void)
 			"- TELEGRAM_CHAT_ID\n"
 		);
 	}
+	setup = 1;
 }
 
 int send_telegram_notification(const char *msg)
@@ -87,8 +109,7 @@ int send_telegram_notification(const char *msg)
 		log_msg("> Unable to send request!\n");
 		goto error;
 	} else {
-		time_last_sent_notify = time(NULL); /* Update the time of our last sent */
-		log_msg("> Done!\n");               /* notification. */
+		log_msg("> Done!\n");
 	}
 #endif
 

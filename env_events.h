@@ -7,6 +7,7 @@
 #define ENV_EVENTS_H
 
 	#define MAX_ENV_EVENTS  16
+	struct log_event;
 
 	struct env_event {
 		int         ev_match_type;     /* whether regex or str.     */
@@ -17,5 +18,6 @@
 
 	extern struct env_event env_events[MAX_ENV_EVENTS];
 	extern int init_environment_events(void);
+	extern int process_environment_event(struct log_event *ev);
 
 #endif /* ENV_EVENTS_H */
