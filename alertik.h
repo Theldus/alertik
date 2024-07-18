@@ -10,7 +10,6 @@
 
 	#define MIN(a,b) (((a)<(b))?(a):(b))
 
-	extern time_t time_last_sent_notify;
 	extern char *get_formatted_time(time_t time, char *time_str);
 	extern void log_msg(const char *fmt, ...);
 	extern int  send_telegram_notification(const char *msg);

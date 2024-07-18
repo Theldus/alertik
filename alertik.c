@@ -5,7 +5,6 @@
 
 #define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
-#include <string.h>
 #include <pthread.h>
 
 #include "alertik.h"
@@ -15,35 +14,32 @@
 #include "notifiers.h"
 #include "syslog.h"
 
-/* Misc. */
-#define LAST_SENT_THRESHOLD_SECS 10  /* Minimum time (in secs) between two */
-time_t time_last_sent_notify; /* notifications. */
-
+/*
+ * Alertik
+ */
 
 static void *handle_messages(void *p)
 {
 	((void)p);
-	size_t i;
+
+	int handled = 0;
 	struct log_event ev = {0};
 
 	while (syslog_pop_msg_from_fifo(&ev) >= 0) {
 		print_log_event(&ev);
 
-		if ((time(NULL) - time_last_sent_notify) <= LAST_SENT_THRESHOLD_SECS) {
+		if (!is_within_notify_threshold()) {
 			log_msg("ignoring, reason: too many notifications!\n");
 			continue;
 		}
 
-		/* Check if it belongs to any of our desired events. */
-		for (i = 0; i < NUM_EVENTS; i++) {
-			if (strstr(ev.msg, handlers[i].str)) {
-				handlers[i].hnd(&ev);
-				break;
-			}
-		}
+		handled  = process_static_event(&ev);
+		handled += process_environment_event(&ev);
 
-		if (i == NUM_EVENTS)
-			log_msg("> No match!\n");
+		if (handled)
+			update_notify_last_sent();
+		else
+			log_msg("> Not handled!\n");
 	}
 	return NULL;
 }
@@ -52,6 +48,10 @@ int main(void)
 {
 	pthread_t handler;
 	int fd;
+
+/* TODO: remove setup_notifiers()..
+ * think about env vars for the static events too, like enable/disable
+ */
 
 	log_init();
 	setup_notifiers();

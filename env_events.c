@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "log.h"
+#include "events.h"
 #include "env_events.h"
 #include "alertik.h"
 #include "notifiers.h"
@@ -20,6 +21,7 @@
 static const char *const match_types[] = {"substr", "regex"};
 
 /* Environment events list. */
+static int num_env_events;
 struct env_event env_events[MAX_ENV_EVENTS] = {0};
 
 /**
@@ -80,30 +82,89 @@ get_event_idx(int ev_num, char *str, const char *const *str_list, int size)
 	panic("String parameter (%s) invalid for %s\n", env, str);
 }
 
+/**/
+static int handle_regex(struct log_event *ev, int idx_env)
+{
+	((void)ev);
+	((void)idx_env);
+	return 0;
+}
 
+/**/
+static int handle_substr(struct log_event *ev, int idx_env)
+{
+	int notif_idx;
+	char time_str[32] = {0};
+	struct env_event *env_ev;
+	char notification_message[2048] = {0};
 
+	env_ev = &env_events[idx_env];
+	notif_idx = env_ev->ev_notifier_idx;
 
+	if (!strstr(ev->msg, env_ev->ev_match_str))
+		return 0;
 
+	log_msg("> Environment event detected!\n");
+	log_msg(">   type: substr, match: (%s), notifier: %s\n",
+		env_ev->ev_match_str, notifiers_str[notif_idx]);
+
+	/* Format the message. */
+	snprintf(
+		notification_message,
+		sizeof notification_message - 1,
+		"%s, at: %s",
+		env_ev->ev_mask_msg,
+		get_formatted_time(ev->timestamp, time_str)
+	);
+
+	if (notifiers[notif_idx].send_notification(notification_message) < 0)
+		log_msg("unable to send the notification through %s\n",
+			notifiers_str[notif_idx]);
+
+	return 1;
+}
+
+/**
+ * @brief Given an environment-variable event, checks if it
+ * belongs to one of the registered events and then, handle
+ * it.
+ *
+ * @param ev Event to be processed.
+ *
+ * @return Returns the amount of matches, 0 if none (not handled).
+ */
+int process_environment_event(struct log_event *ev)
+{
+	int i;
+	int handled;
+
+	for (i = 0, handled = 0; i < num_env_events; i++) {
+		if (env_events[i].ev_match_type == EVNT_SUBSTR)
+			handled += handle_substr(ev, i);
+		else
+			handled += handle_regex(ev, i);
+	}
+	return handled;
+}
 
 
 /**/
 int init_environment_events(void)
 {
 	char *tmp;
-	int events;
-
 	tmp = getenv("ENV_EVENTS");
-	if (!tmp || (str2int(&events, tmp) < 0) || events <= 0)  {
+
+	if (!tmp || (str2int(&num_env_events, tmp) < 0) || num_env_events <= 0)  {
 		log_msg("Environment events not detected, disabling...\n");
 		return (0);
 	}
 
-	if (events >= MAX_ENV_EVENTS)
-		panic("Environment events exceeds the maximum supported (%d/%d)\n",
-			events, MAX_ENV_EVENTS);
+	if (num_env_events >= MAX_ENV_EVENTS)
+		panic("Environment ENV_EVENTS exceeds the maximum supported (%d/%d)\n",
+			num_env_events, MAX_ENV_EVENTS);
 
 	log_msg("%d environment events found, registering...\n");
-	for (int i = 0; i < events; i++) {
+	for (int i = 0; i < num_env_events; i++) {
 		/* EVENTn_MATCH_TYPE. */
 		env_events[i].ev_match_type   = get_event_idx(i, "MATCH_TYPE",
 			match_types, MATCH_TYPES_LEN);
@@ -117,7 +178,7 @@ int init_environment_events(void)
 	}
 
 	log_msg("Environment events summary:\n");
-	for (int i = 0; i < events; i++) {
+	for (int i = 0; i < num_env_events; i++) {
 		printf(
 			"EVENT%d_MATCH_TYPE: %s\n"
 			"EVENT%d_MATCH_STR:  %s\n"
@@ -128,7 +189,9 @@ int init_environment_events(void)
 			i, notifiers_str[env_events[i].ev_notifier_idx],
 			i, env_events[i].ev_mask_msg
 		);
-	}
 
+		/* Try to setup notifier if not yet. */
+		notifiers[env_events[i].ev_notifier_idx].setup();
+	}
 	return (0);
 }

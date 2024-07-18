@@ -16,6 +16,9 @@
 
 	#define NUM_NOTIFIERS 1
 
+	/* Minimum time (in secs) between two */
+	#define LAST_SENT_THRESHOLD_SECS 10
+
 	/* Notifiers list, like:
 	 * - Telegram
 	 * - Slack
@@ -32,5 +35,7 @@
 
 	extern struct notifier notifiers[NUM_NOTIFIERS];
 	extern void setup_notifiers(void);
+	extern int is_within_notify_threshold(void);
+	extern void update_notify_last_sent(void);
 
 #endif /* NOTIFIERS_H */
