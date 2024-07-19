@@ -49,13 +49,11 @@ int main(void)
 	pthread_t handler;
 	int fd;
 
-/* TODO: remove setup_notifiers()..
- * think about env vars for the static events too, like enable/disable
- */
-
 	log_init();
-	setup_notifiers();
-	init_environment_events();
+
+	if (!init_static_events() && !init_environment_events())
+		panic("No event was configured, please configure at least one\n"
+		      "before proceeding!\n");
 
 	log_msg(
 		"Alertik (" GIT_HASH ") (built at " __DATE__ " " __TIME__ ")\n");

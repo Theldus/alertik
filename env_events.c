@@ -147,8 +147,13 @@ int process_environment_event(struct log_event *ev)
 	return handled;
 }
 
-
-/**/
+/**
+ * @brief Initialize environment variables events.
+ *
+ * @return Returns 0 if there is no environment event,
+ * 1 if there is at least one _and_ is successfully
+ * configured.
+*/
 int init_environment_events(void)
 {
 	char *tmp;
@@ -163,7 +168,7 @@ int init_environment_events(void)
 		panic("Environment ENV_EVENTS exceeds the maximum supported (%d/%d)\n",
 			num_env_events, MAX_ENV_EVENTS);
 
-	log_msg("%d environment events found, registering...\n");
+	log_msg("%d environment event(s) found, registering...\n");
 	for (int i = 0; i < num_env_events; i++) {
 		/* EVENTn_MATCH_TYPE. */
 		env_events[i].ev_match_type   = get_event_idx(i, "MATCH_TYPE",
@@ -193,5 +198,5 @@ int init_environment_events(void)
 		/* Try to setup notifier if not yet. */
 		notifiers[env_events[i].ev_notifier_idx].setup();
 	}
-	return (0);
+	return 1;
 }

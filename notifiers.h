@@ -11,6 +11,11 @@
 	// #define VALIDATE_CERTS
 	// #define DISABLE_NOTIFICATIONS
 
+	/*
+	 * Notifier indexes.
+	 */
+	#define NOTIFY_IDX_TELE 0
+
 	#define CURL_USER_AGENT "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " \
 	                        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 
@@ -34,7 +39,6 @@
 	};
 
 	extern struct notifier notifiers[NUM_NOTIFIERS];
-	extern void setup_notifiers(void);
 	extern int is_within_notify_threshold(void);
 	extern void update_notify_last_sent(void);
 
