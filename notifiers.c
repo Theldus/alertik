@@ -132,10 +132,3 @@ struct notifier notifiers[] = {
 		.send_notification = send_telegram_notification
 	}
 };
-
-/* Global setup. */
-void setup_notifiers(void)
-{
-	for (int i = 0; i < NUM_NOTIFIERS; i++)
-		notifiers[i].setup();
-}
