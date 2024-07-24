@@ -6,6 +6,8 @@
 #ifndef ENV_EVENTS_H
 #define ENV_EVENTS_H
 
+	#include <regex.h>
+
 	#define MAX_ENV_EVENTS  16
 	struct log_event;
 
@@ -14,6 +16,7 @@
 		int         ev_notifier_idx;   /* Telegram, Discord...      */
 		const char *ev_match_str;      /* regex str or substr here. */
 		const char *ev_mask_msg;       /* Mask message to be sent.  */
+		regex_t    regex;              /* Compiled regex.           */
 	};
 
 	extern struct env_event env_events[MAX_ENV_EVENTS];

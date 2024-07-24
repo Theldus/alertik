@@ -16,6 +16,9 @@
 #include "alertik.h"
 #include "notifiers.h"
 
+/* Regex params. */
+#define MAX_MATCHES 32
+
 /* Event match types. */
 #define MATCH_TYPES_LEN 2
 static const char *const match_types[] = {"substr", "regex"};
@@ -82,12 +85,176 @@ get_event_idx(int ev_num, char *str, const char *const *str_list, int size)
 	panic("String parameter (%s) invalid for %s\n", env, str);
 }
 
+
+static int append_dst(char **dst, const char *dst_end, char c) {
+	char *d = *dst;
+	if (d < dst_end) {
+		*d   = c;
+		*dst = ++d;
+		return 1;
+	}
+	return 0;
+}
+
+/**/
+static int handle_match_replacement(
+	char       **dst,   char       *dst_e,
+	const char **c_msk, const char *e_msk,
+	regmatch_t *pmatch,
+	struct env_event *env,
+	struct log_event *log_ev)
+{
+	const char *c = *c_msk;
+	const char *e =  e_msk;
+	size_t match  = *c - '0';
+	regoff_t off;
+	regoff_t len;
+
+	/* Check if there is a second digit. */
+	if (c < e) {
+		if (c[1] >= '0' && c[1] <= '9') {
+			match = (match * 10) + (c[1] - '0');
+			c++;
+		}
+	}
+
+	/* Validate if read number is within the match range
+	 * i.e., between 1-nsub.
+	 */
+	if (!match || match > env->regex.re_nsub)
+		return 0;
+
+	*c_msk = c;
+
+	/* Append c_msk into our dst, according to the informed
+	 * match.
+	 */
+	off = pmatch[match].rm_so;
+	len = pmatch[match].rm_eo - off;
+
+	for (regoff_t i = 0; i < len; i++) {
+		if ( !append_dst(dst, dst_e, log_ev->msg[off + i]) )
+			return 0;
+	}
+
+	return 1;
+}
+
+/**/
+static char*
+create_masked_message(struct env_event *env, regmatch_t *pmatch,
+	struct log_event *log_ev, char *buf, size_t buf_size)
+{
+	char        *dst,   *dst_e;
+	const char  *c_msk, *e_msk;
+
+	c_msk = env->ev_mask_msg;
+	e_msk = c_msk + strlen(c_msk);
+	dst   = buf;
+	dst_e = dst + buf_size;
+
+	for (; *c_msk != '\0'; c_msk++)
+	{
+		if (*c_msk != '@') {
+			if (!append_dst(&dst, dst_e, *c_msk))
+				break;
+			continue;
+		}
+
+		/* Abort if there is no next char to look ahead. */
+		else if (c_msk + 1 >= e_msk)
+			break;
+
+		/* Look next char, in order to escape it if needed.
+		 * If next is also '@',escape it.
+		 */
+		if (c_msk[1] == '@') {
+			if (!append_dst(&dst, dst_e, *c_msk))
+				break;
+			else {
+				c_msk++;
+				continue; /* skip next char (since we already read it). */
+			}
+		}
+
+		/* If not a number, abort. */
+		else if (!(c_msk[1] >= '0' && c_msk[1] <= '9')) {
+			log_msg("Warning: expected number at input, but found (%c), "
+				    "the resulting message will be incomplete!\n",
+				    c_msk[1]);
+			break;
+		}
+
+		/* Its a number, proceed the replacement. */
+		else
+		{
+			c_msk++;
+			if (!handle_match_replacement(&dst, dst_e, &c_msk, e_msk,
+				pmatch, env, log_ev))
+			{
+				break;
+			}
+		}
+	}
+	return dst;
+}
+
 /**/
 static int handle_regex(struct log_event *ev, int idx_env)
 {
-	((void)ev);
-	((void)idx_env);
-	return 0;
+	char time_str[32]               = {0};
+	regmatch_t pmatch[MAX_MATCHES]  = {0};
+	char notification_message[2048] = {0};
+
+	int notif_idx;
+	char *notif_p;
+	struct env_event *env_ev;
+
+	env_ev    = &env_events[idx_env];
+	notif_idx = env_ev->ev_notifier_idx;
+
+	if (regexec(&env_ev->regex, ev->msg, MAX_MATCHES, pmatch, 0) == REG_NOMATCH)
+		return 0;
+
+	log_msg("> Environment event detected!\n");
+	log_msg(">   type         : regex\n");
+	log_msg(">   expr         : %s\n",  env_ev->ev_match_str);
+	log_msg(">   amnt sub expr: %zu\n", env_ev->regex.re_nsub);
+	log_msg(">   notifier     : %s\n",  notifiers_str[notif_idx]);
+
+	notif_p = notification_message;
+
+	/* Check if there are any subexpressions, if not, just format
+	 * the message.
+	 */
+	if (env_ev->regex.re_nsub) {
+		notif_p = create_masked_message(env_ev, pmatch, ev,
+			notification_message, sizeof(notification_message) - 1);
+
+		snprintf(
+			notif_p,
+			(notification_message + sizeof(notification_message)) - notif_p,
+			", at: %s",
+			get_formatted_time(ev->timestamp, time_str)
+		);
+	}
+
+	else {
+		snprintf(
+			notification_message,
+			sizeof(notification_message) - 1,
+			"%s, at: %s",
+			env_ev->ev_mask_msg,
+			get_formatted_time(ev->timestamp, time_str)
+		);
+	}
+
+	if (notifiers[notif_idx].send_notification(notification_message) < 0) {
+		log_msg("unable to send the notification through %s\n",
+			notifiers_str[notif_idx]);
+	}
+
+	return 1;
 }
 
 /**/
@@ -117,9 +284,10 @@ static int handle_substr(struct log_event *ev, int idx_env)
 		get_formatted_time(ev->timestamp, time_str)
 	);
 
-	if (notifiers[notif_idx].send_notification(notification_message) < 0)
+	if (notifiers[notif_idx].send_notification(notification_message) < 0) {
 		log_msg("unable to send the notification through %s\n",
 			notifiers_str[notif_idx]);
+	}
 
 	return 1;
 }
@@ -168,7 +336,7 @@ int init_environment_events(void)
 		panic("Environment ENV_EVENTS exceeds the maximum supported (%d/%d)\n",
 			num_env_events, MAX_ENV_EVENTS);
 
-	log_msg("%d environment event(s) found, registering...\n");
+	log_msg("%d environment event(s) found, registering...\n", num_env_events);
 	for (int i = 0; i < num_env_events; i++) {
 		/* EVENTn_MATCH_TYPE. */
 		env_events[i].ev_match_type   = get_event_idx(i, "MATCH_TYPE",
@@ -197,6 +365,18 @@ int init_environment_events(void)
 
 		/* Try to setup notifier if not yet. */
 		notifiers[env_events[i].ev_notifier_idx].setup();
+
+		/* If regex, compile it first. */
+		if (env_events[i].ev_match_type == EVNT_REGEX) {
+			if (regcomp(
+			    &env_events[i].regex,
+			    env_events[i].ev_match_str,
+			    REG_EXTENDED))
+			{
+				panic("Unable to compile regex (%s) for EVENT%d!!!",
+					env_events[i].ev_match_str, i);
+			}
+		}
 	}
 	return 1;
 }
