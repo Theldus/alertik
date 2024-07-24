@@ -65,6 +65,10 @@ int process_static_event(struct log_event *ev)
 	int handled;
 
 	for (i = 0, handled = 0; i < NUM_EVENTS; i++) {
+		/* Skip not enabled events. */
+		if (!handlers[i].enabled)
+			continue;
+
 		if (strstr(ev->msg, handlers[i].str)) {
 			handlers[i].hnd(ev, i);
 			handled += 1;
