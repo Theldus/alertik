@@ -63,11 +63,12 @@ int syslog_create_udp_socket(void)
 /**/
 int syslog_enqueue_new_upd_msg(int fd)
 {
-	struct sockaddr_storage cli;
+	struct sockaddr_storage cli = {0};
 	char msg[MSG_MAX] = {0};
 	socklen_t clilen;
 	ssize_t ret;
 
+	clilen = sizeof(cli);
 	ret = recvfrom(fd, msg, sizeof msg - 1, 0, (struct sockaddr*)&cli,
 		&clilen);
 
