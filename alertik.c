@@ -51,14 +51,14 @@ int main(void)
 
 	log_init();
 
-	if (!init_static_events() && !init_environment_events())
-		panic("No event was configured, please configure at least one\n"
-		      "before proceeding!\n");
-
 	log_msg(
 		"Alertik (" GIT_HASH ") (built at " __DATE__ " " __TIME__ ")\n");
 	log_msg("     (https://github.com/Theldus/alertik)\n");
 	log_msg("-------------------------------------------------\n");
+
+	if (!init_static_events() && !init_environment_events())
+		panic("No event was configured, please configure at least one\n"
+		      "before proceeding!\n");
 
 	fd = syslog_create_udp_socket();
 	if (pthread_create(&handler, NULL, handle_messages, NULL))
