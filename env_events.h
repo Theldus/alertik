@@ -19,7 +19,6 @@
 		regex_t    regex;              /* Compiled regex.           */
 	};
 
-	extern struct env_event env_events[MAX_ENV_EVENTS];
 	extern int init_environment_events(void);
 	extern int process_environment_event(struct log_event *ev);
 
