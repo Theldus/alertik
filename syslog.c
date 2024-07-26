@@ -32,7 +32,11 @@ static pthread_cond_t fifo_new_log_entry = PTHREAD_COND_INITIALIZER;
 static int syslog_push_msg_into_fifo(const char *, time_t);
 
 
-/* Create an UDP socket to read from. */
+/**
+ * @brief Create an UDP socket to read from.
+ *
+ * @return Returns the UDP socket fd if success.
+ */
 int syslog_create_udp_socket(void)
 {
 	struct sockaddr_in svaddr;
@@ -60,7 +64,14 @@ int syslog_create_udp_socket(void)
 	return fd;
 }
 
-/**/
+/**
+ * @brief Receives a new UDP message and then adds it
+ * to the message queue.
+ *
+ * @param fd UDP file descriptor to receive from.
+ *
+ * @return Returns 0 if success, -1 otherwise.
+ */
 int syslog_enqueue_new_upd_msg(int fd)
 {
 	struct sockaddr_storage cli = {0};
@@ -84,6 +95,16 @@ int syslog_enqueue_new_upd_msg(int fd)
 
 
 ///////////////////////////////// FIFO ////////////////////////////////////////
+/**
+ * @brief For a given message @p msg and a timestamp @p timestamp,
+ * adds both to the message queue and then wakes up the waiting
+ * thread.
+ *
+ * @param msg       Read message from UDP.
+ * @param timestamp Current timestamp.
+ *
+ * @return Returns 0 if success, -1 otherwise.
+ */
 static int syslog_push_msg_into_fifo(const char *msg, time_t timestamp)
 {
 	int next;
@@ -108,6 +129,14 @@ static int syslog_push_msg_into_fifo(const char *msg, time_t timestamp)
 	return 0;
 }
 
+/**
+ * @brief Pops a single message from the message queue (if any),
+ * and saves it into @p ev.
+ *
+ * @param ev Target buffer to the retrieved log event.
+ *
+ * @return Returns 0.
+ */
 int syslog_pop_msg_from_fifo(struct log_event *ev)
 {
 	int next;

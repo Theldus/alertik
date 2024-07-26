@@ -16,6 +16,10 @@
 #include "alertik.h"
 #include "notifiers.h"
 
+/*
+ * Environment events
+ */
+
 /* Regex params. */
 #define MAX_MATCHES 32
 
@@ -36,8 +40,8 @@ struct env_event env_events[MAX_ENV_EVENTS] = {0};
  * and slightly adapted: no error classification, because
  * I don't need to know, error is error.
  *
- * @param out Pointer to integer.
- * @param s String to be converted.
+ * @param out  Pointer to integer.
+ * @param s    String to be converted.
  *
  * @return Returns 0 if success and a negative number otherwise.
  */
@@ -62,7 +66,14 @@ static int str2int(int *out, const char *s)
 	return 0;
 }
 
-/**/
+/**
+ * @brief Retrieves the event string from the environment variables.
+ *
+ * @param ev_num Event number.
+ * @param str    String identifier.
+ *
+ * @return Returns the event string.
+ */
 static char *get_event_str(int ev_num, char *str)
 {
 	char *env;
@@ -73,7 +84,16 @@ static char *get_event_str(int ev_num, char *str)
 	return env;
 }
 
-/**/
+/**
+ * @brief Retrieves the index of the event from the environment variables.
+ *
+ * @param ev_num    Event number.
+ * @param str       String identifier.
+ * @param str_list  List of strings to match against.
+ * @param size      Size of the string list.
+ *
+ * @return Returns the index of the matching event.
+ */
 static int
 get_event_idx(int ev_num, char *str, const char *const *str_list, int size)
 {
@@ -85,7 +105,15 @@ get_event_idx(int ev_num, char *str, const char *const *str_list, int size)
 	panic("String parameter (%s) invalid for %s\n", env, str);
 }
 
-
+/**
+ * @brief Appends a character to the destination buffer if there is space.
+ *
+ * @param dst      Pointer to the destination buffer.
+ * @param dst_end  End of the destination buffer.
+ * @param c        Character to append.
+ *
+ * @return Returns 1 if the character was appended, 0 otherwise.
+ */
 static int append_dst(char **dst, const char *dst_end, char c) {
 	char *d = *dst;
 	if (d < dst_end) {
@@ -96,7 +124,19 @@ static int append_dst(char **dst, const char *dst_end, char c) {
 	return 0;
 }
 
-/**/
+/**
+ * @brief Handles match replacement in the event mask message.
+ *
+ * @param dst     Pointer to the destination buffer.
+ * @param dst_e   End of the destination buffer.
+ * @param c_msk   Pointer to the current position in the mask message.
+ * @param e_msk   End of the mask message.
+ * @param pmatch  Array of regex matches.
+ * @param env     Pointer to the environment event.
+ * @param log_ev  Pointer to the log event.
+ *
+ * @return Returns 1 if the replacement was handled, 0 otherwise.
+ */
 static int handle_match_replacement(
 	char       **dst,   char       *dst_e,
 	const char **c_msk, const char *e_msk,
@@ -140,7 +180,18 @@ static int handle_match_replacement(
 	return 1;
 }
 
-/**/
+/**
+ * @brief Creates a masked message based on the base mask string
+ * and the matches found.
+ *
+ * @param env       Pointer to the environment event.
+ * @param pmatch    Array of regex matches.
+ * @param log_ev    Pointer to the log event.
+ * @param buf       Buffer to store the masked message.
+ * @param buf_size  Size of the buffer.
+ *
+ * @return Returns the pointer to the end of the masked message.
+ */
 static char*
 create_masked_message(struct env_event *env, regmatch_t *pmatch,
 	struct log_event *log_ev, char *buf, size_t buf_size)
@@ -199,7 +250,14 @@ create_masked_message(struct env_event *env, regmatch_t *pmatch,
 	return dst;
 }
 
-/**/
+/**
+ * @brief Handles a log event with a regex match.
+ *
+ * @param ev      Pointer to the log event.
+ * @param idx_env Index of the environment event.
+ *
+ * @return Returns 1 if the event was handled, 0 otherwise.
+ */
 static int handle_regex(struct log_event *ev, int idx_env)
 {
 	char time_str[32]               = {0};
@@ -257,7 +315,14 @@ static int handle_regex(struct log_event *ev, int idx_env)
 	return 1;
 }
 
-/**/
+/**
+ * @brief Handles a log event with a substring match.
+ *
+ * @param ev       Pointer to the log event.
+ * @param idx_env  Index of the environment event.
+ *
+ * @return Returns 1 if the event was handled, 0 otherwise.
+ */
 static int handle_substr(struct log_event *ev, int idx_env)
 {
 	int notif_idx;

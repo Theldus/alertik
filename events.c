@@ -13,6 +13,10 @@
 #include "notifiers.h"
 #include "log.h"
 
+/*
+ * Static events
+ */
+
 /* Misc. */
 #define MAX_MATCHES 32
 static regmatch_t pmatch[MAX_MATCHES];
@@ -31,7 +35,14 @@ struct static_event static_events[NUM_EVENTS] = {
 	/* Add new handlers here. */
 };
 
-/**/
+/**
+ * @brief Retrieves the event string from the environment variables.
+ *
+ * @param ev_num Event number.
+ * @param str    String identifier.
+ *
+ * @return Returns the event string.
+ */
 static char *get_event_str(long ev_num, char *str)
 {
 	char *env;
@@ -42,7 +53,16 @@ static char *get_event_str(long ev_num, char *str)
 	return env;
 }
 
-/**/
+/**
+ * @brief Retrieves the index of the event from the environment variables.
+ *
+ * @param ev_num    Event number.
+ * @param str       String identifier.
+ * @param str_list  List of strings to match against.
+ * @param size      Size of the string list.
+ *
+ * @return Returns the index of the matching event.
+ */
 static int
 get_event_idx(long ev_num, char *str, const char *const *str_list, int size)
 {
@@ -173,6 +193,18 @@ int init_static_events(void)
 ///////////////////////////// FAILED LOGIN ATTEMPTS ///////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief Parses the message pointed by @p msg and saves the
+ * read mac-address and interface in @p mac_addr and @wifi_iface.
+ *
+ * @param msg         Buffer to be read and parsed.
+ * @param wifi_iface  Output buffer that will contain the parsed
+ *                    device interface.
+ * @param mac_addr    Output buffer that will contain the parsed
+ *                    mac address.
+ *
+ * @return Returns 0 if success, -1 otherwise.
+ */
 static int
 parse_login_attempt_msg(const char *msg, char *wifi_iface, char *mac_addr)
 {
@@ -207,6 +239,14 @@ parse_login_attempt_msg(const char *msg, char *wifi_iface, char *mac_addr)
 	return (0);
 }
 
+/**
+ * @brief For a given log event @p ev and offset index @p idx_env,
+ * handle the event and send a notification message to the
+ * configured notifier.
+ *
+ * @param ev       Log event structure.
+ * @param idx_env  Event index.
+ */
 static void handle_wifi_login_attempts(struct log_event *ev, int idx_env)
 {
 	char time_str[32]   = {0};
