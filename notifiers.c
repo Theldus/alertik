@@ -45,6 +45,77 @@ int is_within_notify_threshold(void) {
 	return (time(NULL) - time_last_sent_notify) > LAST_SENT_THRESHOLD_SECS;
 }
 
+/**
+ * @brief Initializes and configures the CURL handle for sending a request.
+ *
+ * @param hnd CURL handle.
+ * @param url Request URL.
+ * @return Returns CURLE_OK if successful, otherwise a CURLcode error.
+ */
+static void setopts_get_curl(CURL *hnd, const char *url)
+{
+	curl_easy_setopt(hnd, CURLOPT_URL, url);
+	curl_easy_setopt(hnd, CURLOPT_NOPROGRESS,    1L);
+	curl_easy_setopt(hnd, CURLOPT_USERAGENT, CURL_USER_AGENT);
+	curl_easy_setopt(hnd, CURLOPT_MAXREDIRS,     3L);
+	curl_easy_setopt(hnd, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(hnd, CURLOPT_WRITEFUNCTION, libcurl_noop_cb);
+#ifdef CURL_VERBOSE
+	curl_easy_setopt(hnd, CURLOPT_VERBOSE, 1L);
+#endif
+#ifndef VALIDATE_CERTS
+	curl_easy_setopt(hnd, CURLOPT_SSL_VERIFYPEER, 0L);
+#endif
+}
+
+/**
+ *
+ */
+static void do_curl_cleanup(CURL *hnd, char *escape)
+{
+	curl_free(escape);
+	if (hnd)
+		curl_easy_cleanup(hnd);
+}
+
+/**
+ *
+ */
+static CURLcode do_curl(CURL *hnd, char *escape)
+{
+	CURLcode ret_curl = !CURLE_OK;
+
+#ifndef DISABLE_NOTIFICATIONS
+	ret_curl = curl_easy_perform(hnd);
+	if (ret_curl != CURLE_OK) {
+		log_msg("> Unable to send request!\n");
+		goto error;
+	} else {
+		log_msg("> Done!\n");
+	}
+#endif
+
+	ret_curl = CURLE_OK;
+error:
+	do_curl_cleanup(hnd, escape);
+	return ret_curl;
+}
+
+/**
+ * @brief Initializes and configures the CURL handle for sending a POST
+ * request with a JSON payload.
+ *
+ * @param hnd      CURL handle.
+ * @param url      Request URL.
+ * @param payload  Payload data in JSON format.
+ *
+ * @return Returns CURLE_OK if successful, otherwise a CURLcode error.
+ */
+static void setopts_post_json_curl(CURL *hnd, const char *url,
+	const char *payload)
+{
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////// TELEGRAM //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -76,24 +147,17 @@ int send_telegram_notification(const char *msg)
 {
 	char full_request_url[4096] = {0};
 	char *escaped_msg = NULL;
-	CURLcode ret_curl;
-	CURL *hnd;
-	int ret;
+	CURL *hnd         = NULL;
 
-	ret = -1;
-
-	hnd = curl_easy_init();
-	if (!hnd) {
-		log_msg("> Unable to initialize libcurl!\n");
-		return ret;
+	if (!(hnd = curl_easy_init())) {
+		log_msg("Failed to initialize libcurl!\n");
+		return -1;
 	}
-
-	log_msg("> Sending notification!\n");
 
 	escaped_msg = curl_easy_escape(hnd, msg, 0);
 	if (!escaped_msg) {
 		log_msg("> Unable to escape notification message...\n");
-		goto error;
+		do_curl_cleanup(hnd, escaped_msg);
 	}
 
 	snprintf(
@@ -102,39 +166,18 @@ int send_telegram_notification(const char *msg)
 		"https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s",
 		telegram_bot_token, telegram_chat_id, escaped_msg);
 
-	curl_easy_setopt(hnd, CURLOPT_URL, full_request_url);
-	curl_easy_setopt(hnd, CURLOPT_NOPROGRESS,    1L);
-	curl_easy_setopt(hnd, CURLOPT_USERAGENT, CURL_USER_AGENT);
-	curl_easy_setopt(hnd, CURLOPT_MAXREDIRS,     3L);
-	curl_easy_setopt(hnd, CURLOPT_TCP_KEEPALIVE, 1L);
-	curl_easy_setopt(hnd, CURLOPT_WRITEFUNCTION, libcurl_noop_cb);
-#ifdef CURL_VERBOSE
-	curl_easy_setopt(hnd, CURLOPT_VERBOSE, 1L);
-#endif
-#ifndef VALIDATE_CERTS
-	curl_easy_setopt(hnd, CURLOPT_SSL_VERIFYPEER, 0L);
-#endif
+	setopts_get_curl(hnd, full_request_url);
 
-#ifndef DISABLE_NOTIFICATIONS
-	ret_curl = curl_easy_perform(hnd);
-	if (ret_curl != CURLE_OK) {
-		log_msg("> Unable to send request!\n");
-		goto error;
-	} else {
-		log_msg("> Done!\n");
-	}
-#endif
+	log_msg("> Sending notification!\n");
 
-	ret = 0;
-error:
-	curl_free(escaped_msg);
-	curl_easy_cleanup(hnd);
-	return ret;
+	return do_curl(hnd, escaped_msg);
 }
 ////////////////////////////////// END ////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 const char *const notifiers_str[] = {
-	"Telegram"
+	"Telegram", "Slack",    "Discord",  "Teams",
+	"Generic1", "Generic2", "Generic3", "Generic4"
 };
 
 struct notifier notifiers[] = {
