@@ -14,12 +14,18 @@
 	/*
 	 * Notifier indexes.
 	 */
-	#define NOTIFY_IDX_TELE 0
+	#define NUM_NOTIFIERS 8
+	#define NOTIFY_IDX_TELE    0
+	#define NOTIFY_IDX_SLACK   1
+	#define NOTIFY_IDX_DISCORD 2
+	#define NOTIFY_IDX_TEAMS   3
+	#define NOTIFY_IDX_GENRC1  (NUM_NOTIFIERS-4)
+	#define NOTIFY_IDX_GENRC2  (NUM_NOTIFIERS-3)
+	#define NOTIFY_IDX_GENRC3  (NUM_NOTIFIERS-2)
+	#define NOTIFY_IDX_GENRC4  (NUM_NOTIFIERS-1)
 
 	#define CURL_USER_AGENT "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " \
 	                        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-
-	#define NUM_NOTIFIERS 1
 
 	/* Minimum time (in secs) between two */
 	#define LAST_SENT_THRESHOLD_SECS 10
