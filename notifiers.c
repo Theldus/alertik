@@ -26,17 +26,29 @@ size_t libcurl_noop_cb(void *ptr, size_t size, size_t nmemb, void *data) {
 	return size * nmemb;
 }
 
-/**/
+/**
+ * @brief Just updates the time (Epoch) of the last sent
+ * notify.
+ */
 void update_notify_last_sent(void) {
 	time_last_sent_notify = time(NULL);
 }
 
-/**/
+/**
+ * @brief Checks if the current time is within or not
+ * the minimal threshold to send a nofication.
+ *
+ * @return Returns 1 if within the range (can send nofications),
+ * 0 otherwise.
+ */
 int is_within_notify_threshold(void) {
 	return (time(NULL) - time_last_sent_notify) > LAST_SENT_THRESHOLD_SECS;
 }
 
+////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////// TELEGRAM //////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 /* Telegram & request settings. */
 static char *telegram_bot_token;
 static char *telegram_chat_id;

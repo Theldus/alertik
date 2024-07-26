@@ -16,6 +16,10 @@
 #include "events.h"
 #include "log.h"
 
+/*
+ * Alertik's log routines
+ */
+
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int curr_file;
 
@@ -49,7 +53,15 @@ out:
 	pthread_mutex_unlock(&log_mutex);
 }
 
-/**/
+/**
+ * @brief Format the current time passed as @p time
+ * into the buffer @p time_str.
+ *
+ * @param time     Time to be formated as string.
+ * @param time_str Output buffer.
+ *
+ * @return Returns the output buffer.
+ */
 char *get_formatted_time(time_t time, char *time_str)
 {
 	strftime(
@@ -61,7 +73,12 @@ char *get_formatted_time(time_t time, char *time_str)
 	return time_str;
 }
 
-/**/
+/**
+ * @brief Receives a formated string and outputs to stdout
+ * with the current timestamp.
+ *
+ * @param fmt String format.
+ */
 void log_msg(const char *fmt, ...)
 {
 	char time_str[32] = {0};
@@ -75,7 +92,12 @@ void log_msg(const char *fmt, ...)
 	close_log_file();
 }
 
-/**/
+/**
+ * @brief For a given log event @p ev, print the log event
+ * into the log file (wheter stdout or an actual file).
+ *
+ * @param ev Log event to be printed.
+ */
 void print_log_event(struct log_event *ev)
 {
 	char time_str[32] = {0};
@@ -85,7 +107,9 @@ void print_log_event(struct log_event *ev)
 	close_log_file();
 }
 
-/**/
+/**
+ * @brief Initializes the logging routines.
+ */
 void log_init(void) {
 	atexit(close_log_file);
 #ifndef USE_FILE_AS_LOG
