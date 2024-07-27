@@ -12,6 +12,5 @@
 
 	extern char *get_formatted_time(time_t time, char *time_str);
 	extern void log_msg(const char *fmt, ...);
-	extern int  send_telegram_notification(const char *msg);
 
 #endif /* ALERTIK_H */
