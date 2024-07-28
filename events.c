@@ -12,6 +12,7 @@
 #include "alertik.h"
 #include "notifiers.h"
 #include "log.h"
+#include "str.h"
 
 /*
  * Static events
@@ -252,18 +253,19 @@ static void handle_wifi_login_attempts(struct log_event *ev, int idx_env)
 	char time_str[32]   = {0};
 	char mac_addr[32]   = {0};
 	char wifi_iface[32] = {0};
-	char notification_message[2048] = {0};
+	struct str_ab notif_message;
 	int notif_idx;
+	int ret;
 
 	log_msg("> Login attempt detected!\n");
 
 	if (parse_login_attempt_msg(ev->msg, wifi_iface, mac_addr) < 0)
 		return;
 
+	ab_init(&notif_message);
+
 	/* Send our notification. */
-	snprintf(
-		notification_message,
-		sizeof notification_message - 1,
+	ret = ab_append_fmt(&notif_message,
 		"There is someone trying to connect "
 		"to your WiFi: %s, with the mac-address: %s, at:%s",
 		wifi_iface,
@@ -271,10 +273,13 @@ static void handle_wifi_login_attempts(struct log_event *ev, int idx_env)
 		get_formatted_time(ev->timestamp, time_str)
 	);
 
+	if (ret)
+		return;
+
 	log_msg("> Retrieved info, MAC: (%s), Interface: (%s)\n", mac_addr, wifi_iface);
 
 	notif_idx = static_events[idx_env].ev_notifier_idx;
-	if (notifiers[notif_idx].send_notification(notification_message) < 0) {
+	if (notifiers[notif_idx].send_notification(notif_message.buff) < 0) {
 		log_msg("unable to send the notification!\n");
 		return;
 	}

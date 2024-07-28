@@ -11,6 +11,7 @@
 #include "log.h"
 #include "notifiers.h"
 #include "alertik.h"
+#include "str.h"
 
 /*
  * Notification handling/notifiers
@@ -69,7 +70,12 @@ static int setopts_get_curl(CURL *hnd, const char *url)
 }
 
 /**
+ * @brief Cleanup all resources used by libcurl, including the handler,
+ * curl_slist and escape'd chars.
  *
+ * @param hnd    curl handler
+ * @param escape Escape string if any (leave NULL if there's none).
+ * @param slist  String list if any (leave NULL if there's none).
  */
 static void do_curl_cleanup(CURL *hnd, char *escape, struct curl_slist *slist)
 {
@@ -80,19 +86,33 @@ static void do_curl_cleanup(CURL *hnd, char *escape, struct curl_slist *slist)
 }
 
 /**
+ * @brief Finally sends a curl request, check its return code
+ * and then cleanup the resources allocated.
  *
+ * @param hnd    curl handler
+ * @param escape Escape string if any (leave NULL if there's none).
+ * @param slist  String list if any (leave NULL if there's none).
+ *
+ * @return Returns CURLE_OK if success, !CURLE_OK if error.
  */
 static CURLcode do_curl(CURL *hnd, char *escape, struct curl_slist *slist)
 {
-	CURLcode ret_curl = !CURLE_OK;
+	long response_code = 0;
+	CURLcode ret_curl  = !CURLE_OK;
 
 #ifndef DISABLE_NOTIFICATIONS
 	ret_curl = curl_easy_perform(hnd);
 	if (ret_curl != CURLE_OK) {
 		log_msg("> Unable to send request!\n");
 		goto error;
-	} else {
-		log_msg("> Done!\n");
+	}
+	else {
+		curl_easy_getinfo(hnd, CURLINFO_RESPONSE_CODE, &response_code);
+		log_msg("> Done!\n", response_code);
+		if (response_code != 200) {
+			log_msg("(Info: Response code != 200 (%ld), your message might "
+			        "not be correctly sent!)\n", response_code);
+		}
 	}
 #endif
 
@@ -143,36 +163,48 @@ static int setopts_post_json_curl(CURL *hnd, const char *url,
 }
 
 /**
+ * @brief Sends a generic webhook POST request with JSON payload in the
+ * format {"text": "text here"}.
  *
+ * @param url  Target webhook URL.
+ * @param text Text to be sent in the json payload.
+ *
+ * @return Returns CURLE_OK if success, 1 if error.
  */
 static int send_generic_webhook(const char *url, const char *text)
 {
 	CURL *hnd               = NULL;
 	struct curl_slist *s    = NULL;
-	char payload_data[4096] = {0};
+	struct str_ab payload_data;
+	const char *t;
 
 	if (!(hnd = curl_easy_init())) {
 		log_msg("Failed to initialize libcurl!\n");
 		return 1;
 	}
 
-	snprintf(
-		payload_data,
-		sizeof payload_data - 1,
-		"{\"text\":\"%s\"}",
-		text
-	);
+	ab_init(&payload_data);
+	ab_append_str(&payload_data, "{\"text\":\"", 9);
 
+	/* Append the payload data text while escaping double
+	 * quotes.
+	 */
+	for (t = text; *t != '\0'; t++) {
+		if (*t != '"') {
+			if (ab_append_chr(&payload_data, *t) < 0)
+				return 1;
+		}
+		else {
+			if (ab_append_str(&payload_data, "\\\"", 2) < 0)
+				return 1;
+		}
+	}
 
-	#if 0
-	TODO:
-	- escape "" in the payload, otherwise it will silently
-	escape from the {"text": }
-	- think about the return code from the request and
-	emmit some message if not 200
-	#endif
+	/* End the string. */
+	if (ab_append_str(&payload_data, "\"}", 2) < 0)
+		return 1;
 
-	if (setopts_post_json_curl(hnd, url, payload_data, &s))
+	if (setopts_post_json_curl(hnd, url, payload_data.buff, &s))
 		return 1;
 
 	log_msg("> Sending notification!\n");
@@ -209,9 +241,10 @@ void setup_telegram(void)
 
 static int send_telegram_notification(const char *msg)
 {
-	char full_request_url[4096] = {0};
+	struct str_ab full_request_url;
 	char *escaped_msg = NULL;
 	CURL *hnd         = NULL;
+	int  ret;
 
 	if (!(hnd = curl_easy_init())) {
 		log_msg("Failed to initialize libcurl!\n");
@@ -224,13 +257,16 @@ static int send_telegram_notification(const char *msg)
 		do_curl_cleanup(hnd, escaped_msg, NULL);
 	}
 
-	snprintf(
-		full_request_url,
-		sizeof full_request_url - 1,
+	ab_init(&full_request_url);
+
+	ret = ab_append_fmt(&full_request_url,
 		"https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s",
 		telegram_bot_token, telegram_chat_id, escaped_msg);
 
-	setopts_get_curl(hnd, full_request_url);
+	if (ret)
+		return -1;
+
+	setopts_get_curl(hnd, full_request_url.buff);
 	log_msg("> Sending notification!\n");
 	return do_curl(hnd, escaped_msg, NULL);
 }
@@ -250,7 +286,7 @@ void setup_slack(void)
 
 	slack_webhook_url = getenv("SLACK_WEBHOOK_URL");
 	if (!slack_webhook_url) {
-		panic("Unable to find env vars for, please check if you have set\n"
+		panic("Unable to find env vars for Slack, please check if you have set "
 		      "the SLACK_WEBHOOK_URL!!\n");
 	}
 	setup = 1;

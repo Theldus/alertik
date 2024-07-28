@@ -15,6 +15,7 @@
 #include "env_events.h"
 #include "alertik.h"
 #include "notifiers.h"
+#include "str.h"
 
 /*
  * Environment events
@@ -106,29 +107,9 @@ get_event_idx(int ev_num, char *str, const char *const *str_list, int size)
 }
 
 /**
- * @brief Appends a character to the destination buffer if there is space.
- *
- * @param dst      Pointer to the destination buffer.
- * @param dst_end  End of the destination buffer.
- * @param c        Character to append.
- *
- * @return Returns 1 if the character was appended, 0 otherwise.
- */
-static int append_dst(char **dst, const char *dst_end, char c) {
-	char *d = *dst;
-	if (d < dst_end) {
-		*d   = c;
-		*dst = ++d;
-		return 1;
-	}
-	return 0;
-}
-
-/**
  * @brief Handles match replacement in the event mask message.
  *
- * @param dst     Pointer to the destination buffer.
- * @param dst_e   End of the destination buffer.
+ * @param notif_message Pointer to the append buffer.
  * @param c_msk   Pointer to the current position in the mask message.
  * @param e_msk   End of the mask message.
  * @param pmatch  Array of regex matches.
@@ -138,7 +119,7 @@ static int append_dst(char **dst, const char *dst_end, char c) {
  * @return Returns 1 if the replacement was handled, 0 otherwise.
  */
 static int handle_match_replacement(
-	char       **dst,   char       *dst_e,
+	struct str_ab *notif_message,
 	const char **c_msk, const char *e_msk,
 	regmatch_t *pmatch,
 	struct env_event *env,
@@ -172,10 +153,8 @@ static int handle_match_replacement(
 	off = pmatch[match].rm_so;
 	len = pmatch[match].rm_eo - off;
 
-	for (regoff_t i = 0; i < len; i++) {
-		if ( !append_dst(dst, dst_e, log_ev->msg[off + i]) )
-			return 0;
-	}
+	if (ab_append_str(notif_message, log_ev->msg + off, len) < 0)
+		return 0;
 
 	return 1;
 }
@@ -192,22 +171,19 @@ static int handle_match_replacement(
  *
  * @return Returns the pointer to the end of the masked message.
  */
-static char*
+static int
 create_masked_message(struct env_event *env, regmatch_t *pmatch,
-	struct log_event *log_ev, char *buf, size_t buf_size)
+	struct log_event *log_ev, struct str_ab *notif_message)
 {
-	char        *dst,   *dst_e;
-	const char  *c_msk, *e_msk;
+	const char *c_msk, *e_msk;
 
 	c_msk = env->ev_mask_msg;
 	e_msk = c_msk + strlen(c_msk);
-	dst   = buf;
-	dst_e = dst + buf_size;
 
 	for (; *c_msk != '\0'; c_msk++)
 	{
 		if (*c_msk != '@') {
-			if (!append_dst(&dst, dst_e, *c_msk))
+			if (ab_append_chr(notif_message, *c_msk) < 0)
 				break;
 			continue;
 		}
@@ -220,7 +196,7 @@ create_masked_message(struct env_event *env, regmatch_t *pmatch,
 		 * If next is also '@',escape it.
 		 */
 		if (c_msk[1] == '@') {
-			if (!append_dst(&dst, dst_e, *c_msk))
+			if (ab_append_chr(notif_message, *c_msk) < 0)
 				break;
 			else {
 				c_msk++;
@@ -240,14 +216,16 @@ create_masked_message(struct env_event *env, regmatch_t *pmatch,
 		else
 		{
 			c_msk++;
-			if (!handle_match_replacement(&dst, dst_e, &c_msk, e_msk,
+			if (!handle_match_replacement(notif_message, &c_msk, e_msk,
 				pmatch, env, log_ev))
 			{
 				break;
 			}
 		}
 	}
-	return dst;
+
+	/* If we could parse the entire mask. */
+	return (*c_msk == '\0');
 }
 
 /**
@@ -262,10 +240,10 @@ static int handle_regex(struct log_event *ev, int idx_env)
 {
 	char time_str[32]               = {0};
 	regmatch_t pmatch[MAX_MATCHES]  = {0};
-	char notification_message[2048] = {0};
+	struct str_ab notif_message;
 
+	int ret;
 	int notif_idx;
-	char *notif_p;
 	struct env_event *env_ev;
 
 	env_ev    = &env_events[idx_env];
@@ -280,34 +258,35 @@ static int handle_regex(struct log_event *ev, int idx_env)
 	log_msg(">   amnt sub expr: %zu\n", env_ev->regex.re_nsub);
 	log_msg(">   notifier     : %s\n",  notifiers_str[notif_idx]);
 
-	notif_p = notification_message;
+	ab_init(&notif_message);
 
 	/* Check if there are any subexpressions, if not, just format
 	 * the message.
 	 */
 	if (env_ev->regex.re_nsub) {
-		notif_p = create_masked_message(env_ev, pmatch, ev,
-			notification_message, sizeof(notification_message) - 1);
+		if (!create_masked_message(env_ev, pmatch, ev, &notif_message)) {
+			log_msg("Unable to create masked message!\n");
+			return 0;
+		}
 
-		snprintf(
-			notif_p,
-			(notification_message + sizeof(notification_message)) - notif_p,
-			", at: %s",
-			get_formatted_time(ev->timestamp, time_str)
-		);
+		if (ab_append_fmt(&notif_message, ", at: %s",
+		    get_formatted_time(ev->timestamp, time_str)))
+		{
+			return 0;
+		}
 	}
 
 	else {
-		snprintf(
-			notification_message,
-			sizeof(notification_message) - 1,
+		ret = ab_append_fmt(&notif_message,
 			"%s, at: %s",
 			env_ev->ev_mask_msg,
-			get_formatted_time(ev->timestamp, time_str)
-		);
+			get_formatted_time(ev->timestamp, time_str));
+
+		if (ret)
+			return 0;
 	}
 
-	if (notifiers[notif_idx].send_notification(notification_message) < 0) {
+	if (notifiers[notif_idx].send_notification(notif_message.buff) < 0) {
 		log_msg("unable to send the notification through %s\n",
 			notifiers_str[notif_idx]);
 	}
@@ -325,10 +304,11 @@ static int handle_regex(struct log_event *ev, int idx_env)
  */
 static int handle_substr(struct log_event *ev, int idx_env)
 {
+	int ret;
 	int notif_idx;
 	char time_str[32] = {0};
 	struct env_event *env_ev;
-	char notification_message[2048] = {0};
+	struct str_ab notif_message;
 
 	env_ev = &env_events[idx_env];
 	notif_idx = env_ev->ev_notifier_idx;
@@ -340,16 +320,19 @@ static int handle_substr(struct log_event *ev, int idx_env)
 	log_msg(">   type: substr, match: (%s), notifier: %s\n",
 		env_ev->ev_match_str, notifiers_str[notif_idx]);
 
+	ab_init(&notif_message);
+
 	/* Format the message. */
-	snprintf(
-		notification_message,
-		sizeof notification_message - 1,
+	ret = ab_append_fmt(&notif_message,
 		"%s, at: %s",
 		env_ev->ev_mask_msg,
 		get_formatted_time(ev->timestamp, time_str)
 	);
 
-	if (notifiers[notif_idx].send_notification(notification_message) < 0) {
+	if (ret)
+		return 0;
+
+	if (notifiers[notif_idx].send_notification(notif_message.buff) < 0) {
 		log_msg("unable to send the notification through %s\n",
 			notifiers_str[notif_idx]);
 	}
