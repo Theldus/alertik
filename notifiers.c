@@ -17,6 +17,11 @@
  * Notification handling/notifiers
  */
 
+struct webhook_data {
+	char *webhook_url;
+	const char *env_var;
+};
+
 /* EPOCH in secs of last sent notification. */
 static time_t time_last_sent_notify;
 
@@ -220,11 +225,13 @@ static int send_generic_webhook(const char *url, const char *text)
 static char *telegram_bot_token;
 static char *telegram_chat_id;
 
-void setup_telegram(void)
+void setup_telegram(struct notifier *self)
 {
 	static int setup = 0;
 	if (setup)
 		return;
+
+	((void)self);
 
 	telegram_bot_token = getenv("TELEGRAM_BOT_TOKEN");
 	telegram_chat_id   = getenv("TELEGRAM_CHAT_ID");
@@ -239,12 +246,14 @@ void setup_telegram(void)
 	setup = 1;
 }
 
-static int send_telegram_notification(const char *msg)
+static int send_telegram_notification(const struct notifier *self, const char *msg)
 {
 	struct str_ab full_request_url;
 	char *escaped_msg = NULL;
 	CURL *hnd         = NULL;
 	int  ret;
+
+	((void)self);
 
 	if (!(hnd = curl_easy_init())) {
 		log_msg("Failed to initialize libcurl!\n");
@@ -272,81 +281,42 @@ static int send_telegram_notification(const char *msg)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-////////////////////////////////// SLACK //////////////////////////////////////
+///////////////////////////////// GENERIC /////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-/* Slack settings. */
-static char *slack_webhook_url;
-
-void setup_slack(void)
+void setup_generic_webhook(struct notifier *self)
 {
-	static int setup = 0;
-	if (setup)
+	struct webhook_data *data = self->data;
+
+	if (data->webhook_url)
 		return;
 
-	slack_webhook_url = getenv("SLACK_WEBHOOK_URL");
-	if (!slack_webhook_url) {
-		panic("Unable to find env vars for Slack, please check if you have set "
-		      "the SLACK_WEBHOOK_URL!!\n");
+	data->webhook_url = getenv(data->env_var);
+	if (!data->webhook_url) {
+		panic("Unable to find env vars, please check if you have set the %s!!\n",
+			data->env_var);
 	}
-	setup = 1;
 }
 
-static int send_slack_notification(const char *msg) {
-	return send_generic_webhook(slack_webhook_url, msg);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-////////////////////////////////// TEAMS //////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-/* Teams settings. */
-static char *teams_webhook_url;
-
-void setup_teams(void)
+static int send_generic_webhook_notification(
+	const struct notifier *self, const char *msg)
 {
-	static int setup = 0;
-	if (setup)
-		return;
-
-	teams_webhook_url = getenv("TEAMS_WEBHOOK_URL");
-	if (!teams_webhook_url) {
-		panic("Unable to find env vars for Teams, please check if you have set "
-		      "the TEAMS_WEBHOOK_URL!!\n");
-	}
-	setup = 1;
-}
-
-static int send_teams_notification(const char *msg) {
-	return send_generic_webhook(teams_webhook_url, msg);
+	struct webhook_data *data = self->data;
+    return send_generic_webhook(data->webhook_url, msg);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// DISCORD /////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-/* Discord settings. */
-static char *discord_webhook_url;
-
-void setup_discord(void)
-{
-	static int setup = 0;
-	if (setup)
-		return;
-
-	discord_webhook_url = getenv("DISCORD_WEBHOOK_URL");
-	if (!discord_webhook_url) {
-		panic("Unable to find env vars for Discord, please check if you have set "
-		      "the DISCORD_WEBHOOK_URL!!\n");
-	}
-	setup = 1;
-}
-
 /* Discord in Slack-compatible mode. */
-static int send_discord_notification(const char *msg) {
+static int send_discord_notification(
+	const struct notifier *self, const char *msg)
+{
+	struct webhook_data *data = self->data;
 	struct str_ab url;
 	ab_init(&url);
-	if (ab_append_fmt("%s/slack", discord_webhook_url) < 0)
+	if (ab_append_fmt(&url, "%s/slack", data->webhook_url) < 0)
 		return 1;
 	return send_generic_webhook(url.buff, msg);
 }
@@ -362,22 +332,33 @@ const char *const notifiers_str[] = {
 struct notifier notifiers[] = {
 	/* Telegram. */
 	{
-		.setup = setup_telegram,
-		.send_notification = send_telegram_notification
+		.setup             = setup_telegram,
+		.send_notification = send_telegram_notification,
 	},
 	/* Slack. */
 	{
-		.setup = setup_slack,
-		.send_notification = send_slack_notification
+		.setup             = setup_generic_webhook,
+		.send_notification = send_generic_webhook_notification,
+		.data              = &(struct webhook_data)
+		                     {.env_var = "SLACK_WEBHOOK_URL"},
 	},
 	/* Teams. */
 	{
-		.setup = setup_teams,
-		.send_notification = send_teams_notification
+		.setup             = setup_generic_webhook,
+		.send_notification = send_generic_webhook_notification,
+		.data              = &(struct webhook_data)
+		                     {.env_var = "TEAMS_WEBHOOK_URL"},
 	},
-	/* Discord. */
+	/*
+	 * Discord:
+	 * Since Discord doesn't follow like the others, we need
+	 * to slightly change the URL before proceeding, so this
+	 * is why its function is not generic!.
+	 */
 	{
-		.setup = setup_discord,
-		.send_notification = send_discord_notification
+		.setup             = setup_generic_webhook,
+		.send_notification = send_discord_notification,
+		.data              = &(struct webhook_data)
+		                     {.env_var = "DISCORD_WEBHOOK_URL"},
 	}
 };

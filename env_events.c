@@ -241,6 +241,7 @@ static int handle_regex(struct log_event *ev, int idx_env)
 	char time_str[32]               = {0};
 	regmatch_t pmatch[MAX_MATCHES]  = {0};
 	struct str_ab notif_message;
+	struct notifier *self;
 
 	int ret;
 	int notif_idx;
@@ -248,6 +249,7 @@ static int handle_regex(struct log_event *ev, int idx_env)
 
 	env_ev    = &env_events[idx_env];
 	notif_idx = env_ev->ev_notifier_idx;
+	self      = &notifiers[notif_idx];
 
 	if (regexec(&env_ev->regex, ev->msg, MAX_MATCHES, pmatch, 0) == REG_NOMATCH)
 		return 0;
@@ -286,7 +288,7 @@ static int handle_regex(struct log_event *ev, int idx_env)
 			return 0;
 	}
 
-	if (notifiers[notif_idx].send_notification(notif_message.buff) < 0) {
+	if (self->send_notification(self, notif_message.buff) < 0) {
 		log_msg("unable to send the notification through %s\n",
 			notifiers_str[notif_idx]);
 	}
@@ -307,11 +309,14 @@ static int handle_substr(struct log_event *ev, int idx_env)
 	int ret;
 	int notif_idx;
 	char time_str[32] = {0};
+
+	struct notifier *self;
 	struct env_event *env_ev;
 	struct str_ab notif_message;
 
-	env_ev = &env_events[idx_env];
+	env_ev    = &env_events[idx_env];
 	notif_idx = env_ev->ev_notifier_idx;
+	self      = &notifiers[notif_idx];
 
 	if (!strstr(ev->msg, env_ev->ev_match_str))
 		return 0;
@@ -332,7 +337,7 @@ static int handle_substr(struct log_event *ev, int idx_env)
 	if (ret)
 		return 0;
 
-	if (notifiers[notif_idx].send_notification(notif_message.buff) < 0) {
+	if (self->send_notification(self, notif_message.buff) < 0) {
 		log_msg("unable to send the notification through %s\n",
 			notifiers_str[notif_idx]);
 	}
@@ -372,6 +377,7 @@ int process_environment_event(struct log_event *ev)
 */
 int init_environment_events(void)
 {
+	struct notifier *self;
 	char *tmp;
 	tmp = getenv("ENV_EVENTS");
 
@@ -412,7 +418,8 @@ int init_environment_events(void)
 		);
 
 		/* Try to setup notifier if not yet. */
-		notifiers[env_events[i].ev_notifier_idx].setup();
+		self = &notifiers[env_events[i].ev_notifier_idx];
+		self->setup(self);
 
 		/* If regex, compile it first. */
 		if (env_events[i].ev_match_type == EVNT_REGEX) {

@@ -121,6 +121,7 @@ int process_static_event(struct log_event *ev)
 */
 int init_static_events(void)
 {
+	struct notifier *self;
 	char *ptr, *end;
 	long ev;
 
@@ -172,7 +173,8 @@ int init_static_events(void)
 		);
 
 		/* Try to setup notifier if not yet. */
-		notifiers[static_events[i].ev_notifier_idx].setup();
+		self = &notifiers[static_events[i].ev_notifier_idx];
+		self->setup(self);
 
 		/* If regex, compile it first. */
 		if (static_events[i].ev_match_type == EVNT_REGEX) {
@@ -254,6 +256,7 @@ static void handle_wifi_login_attempts(struct log_event *ev, int idx_env)
 	char mac_addr[32]   = {0};
 	char wifi_iface[32] = {0};
 	struct str_ab notif_message;
+	struct notifier *self;
 	int notif_idx;
 	int ret;
 
@@ -279,7 +282,9 @@ static void handle_wifi_login_attempts(struct log_event *ev, int idx_env)
 	log_msg("> Retrieved info, MAC: (%s), Interface: (%s)\n", mac_addr, wifi_iface);
 
 	notif_idx = static_events[idx_env].ev_notifier_idx;
-	if (notifiers[notif_idx].send_notification(notif_message.buff) < 0) {
+	self      = &notifiers[notif_idx];
+
+	if (self->send_notification(self, notif_message.buff) < 0) {
 		log_msg("unable to send the notification!\n");
 		return;
 	}

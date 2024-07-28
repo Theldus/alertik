@@ -17,8 +17,8 @@
 	#define NUM_NOTIFIERS 8
 	#define NOTIFY_IDX_TELE    0
 	#define NOTIFY_IDX_SLACK   1
-	#define NOTIFY_IDX_DISCORD 2
-	#define NOTIFY_IDX_TEAMS   3
+	#define NOTIFY_IDX_TEAMS   2
+	#define NOTIFY_IDX_DISCORD 3
 	#define NOTIFY_IDX_GENRC1  (NUM_NOTIFIERS-4)
 	#define NOTIFY_IDX_GENRC2  (NUM_NOTIFIERS-3)
 	#define NOTIFY_IDX_GENRC3  (NUM_NOTIFIERS-2)
@@ -40,8 +40,9 @@
 
 	/* Notifier struct. */
 	struct notifier {
-		void(*setup)(void);
-		int(*send_notification)(const char *msg);
+		void *data;
+		void(*setup)(struct notifier *self);
+		int(*send_notification)(const struct notifier *self, const char *msg);
 	};
 
 	extern struct notifier notifiers[NUM_NOTIFIERS];
