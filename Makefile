@@ -8,7 +8,7 @@ CFLAGS  += -Wall -Wextra
 LDLIBS  += -pthread -lcurl
 STRIP    = strip
 VERSION  = v0.1
-OBJS     = alertik.o events.o env_events.o notifiers.o log.o syslog.o
+OBJS     = alertik.o events.o env_events.o notifiers.o log.o syslog.o str.o
 
 ifeq ($(LOG_FILE),yes)
 	CFLAGS += -DUSE_FILE_AS_LOG
