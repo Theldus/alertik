@@ -360,5 +360,31 @@ struct notifier notifiers[] = {
 		.send_notification = send_discord_notification,
 		.data              = &(struct webhook_data)
 		                     {.env_var = "DISCORD_WEBHOOK_URL"},
-	}
+	},
+
+	/* Generic webhook events: 1--4 */
+	{
+		.setup             = setup_generic_webhook,
+		.send_notification = send_generic_webhook_notification,
+		.data              = &(struct webhook_data)
+		                     {.env_var = "GENERIC1_WEBHOOK_URL"},
+	},
+	{
+		.setup             = setup_generic_webhook,
+		.send_notification = send_generic_webhook_notification,
+		.data              = &(struct webhook_data)
+		                     {.env_var = "GENERIC2_WEBHOOK_URL"},
+	},
+	{
+		.setup             = setup_generic_webhook,
+		.send_notification = send_generic_webhook_notification,
+		.data              = &(struct webhook_data)
+		                     {.env_var = "GENERIC3_WEBHOOK_URL"},
+	},
+	{
+		.setup             = setup_generic_webhook,
+		.send_notification = send_generic_webhook_notification,
+		.data              = &(struct webhook_data)
+		                     {.env_var = "GENERIC4_WEBHOOK_URL"},
+	},
 };
