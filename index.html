@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>POSIX Regex Extended Validator</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				background-color: #e0f7da;
+				color: #2e7d32;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				height: 100vh;
+				margin: 0;
+			}
+			.container {
+				background-color: #a5d6a7;
+				border-radius: 10px;
+				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+				padding: 20px;
+				max-width: 800px;
+				width: 100%;
+				text-align: center;
+			}
+			.container h1 {
+				margin-bottom: 20px;
+				font-size: 24px;
+			}
+			.form-group {
+				margin-bottom: 15px;
+				width: 100%;
+			}
+			.form-group label {
+				font-weight: bold;
+				display: block;
+				margin-bottom: 5px;
+			}
+			.form-group textarea,
+			.form-group input {
+				width: calc(100% - 20px);
+				padding: 10px;
+				border: 1px solid #81c784;
+				border-radius: 5px;
+				box-sizing: border-box;
+			}
+			textarea {
+				resize: none;
+			}
+			input[readonly],
+			.output {
+				background-color: #f1f8e9;
+				text-align: left;
+			}
+			.form-group input[type="text"].no-match {
+				background-color: #ffcccb;
+			}
+			ul {
+				list-style-type: none;
+				padding-left: 0;
+				margin: 0;
+			}
+			ul li {
+				background-color: #f1f8e9;
+				border: 1px solid #81c784;
+				border-radius: 5px;
+				margin-bottom: 5px;
+				padding: 10px;
+			}
+			.result {
+				font-weight: bold;
+			}
+			.env-variable {
+				margin-top: 10px;
+				font-style: italic;
+				color: #1b5e20;
+			}
+			.footer {
+				margin-top: 20px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+			}
+			.footer img {
+				width: 20px;
+				height: 20px;
+				margin-right: 10px;
+			}
+			.flex-container {
+				display: flex;
+				justify-content: space-between;
+				align-items: flex-start;
+				width: 100%;
+			}
+			.flex-item {
+				width: 48%;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>POSIX Regex Extended Validator</h1>
+			<div class="form-group">
+				<label for="regex">Your Regex</label>
+				<textarea id="regex" placeholder="Enter your regex" oninput="validateRegex()"></textarea>
+			</div>
+			<div class="form-group">
+				<label for="inputString">Input Field</label>
+				<textarea id="inputString" placeholder="Enter input string" oninput="validateRegex()"></textarea>
+			</div>
+			<div class="flex-container">
+				<div class="flex-item">
+					<div class="form-group">
+						<label for="isMatch">Matches?</label>
+						<input type="text" id="isMatch" readonly />
+					</div>
+					<div class="form-group">
+						<label for="matches">Matching Output</label>
+						<input type="text" id="matches" readonly />
+					</div>
+				</div>
+				<div class="flex-item">
+					<div class="form-group">
+						<label for="groups">Matching Groups</label>
+						<ul id="groups" class="output"></ul>
+					</div>
+				</div>
+			</div>
+			<div id="envVariable" class="env-variable"></div>
+			<div class="footer">
+				<a href="https://github.com/Theldus/alertik" target="_blank">
+					<img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo" />
+				</a>
+				<span>by Theldus</span>
+			</div>
+		</div>
+
+		<script async type="text/javascript" src="regext.js"></script>
+		<script>
+			function arrayToPtr(array, bytes_per_element) {
+				var ptr = Module._malloc(array.length * bytes_per_element);
+				for (var i = 0; i < array.length; i++) {
+					Module.setValue(ptr + i * bytes_per_element, array[i], "i32");
+				}
+				return ptr;
+			}
+
+			function ptrToArray(ptr, length, bytes_per_element) {
+				var array = new Int32Array(length);
+				var pos	  = ptr / bytes_per_element;
+				array.set(Module.HEAP32.subarray(pos, pos + length));
+				return array;
+			}
+
+			function validateRegex() {
+				const regexInput   = document.getElementById("regex").value;
+				const inputString  = document.getElementById("inputString").value;
+				const isMatchInput = document.getElementById("isMatch");
+				const matchesInput = document.getElementById("matches");
+				const groupsList   = document.getElementById("groups");
+				const envVariable  = document.getElementById("envVariable");
+
+				if (regexInput === "" || inputString === "") {
+					isMatchInput.value      = "";
+					matchesInput.value      = "";
+					groupsList.innerHTML    = "";
+					envVariable.textContent = "";
+					return;
+				}
+
+				const subExpr  = new Int32Array(1);
+				const rmSo     = new Int32Array(32);
+				const rmEo     = new Int32Array(32);
+				const errorMsg = new Uint8Array(128);
+
+				const rePtr = Module._malloc(regexInput.length + 1);
+				Module.stringToUTF8(regexInput, rePtr, regexInput.length + 1);
+
+				const strPtr = Module._malloc(inputString.length + 1);
+				Module.stringToUTF8(inputString, strPtr, inputString.length + 1);
+
+				const subExprPtr  = arrayToPtr(subExpr, 4);
+				const rmSoPtr     = arrayToPtr(rmSo, 4);
+				const rmEoPtr     = arrayToPtr(rmEo, 4);
+				const errorMsgPtr = arrayToPtr(errorMsg, 1);
+
+				const result = Module._do_regex(rePtr, strPtr, subExprPtr, rmSoPtr,
+					rmEoPtr, errorMsgPtr);
+
+				if (result === -1) {
+					const errorMsgStr = Module.UTF8ToString(errorMsgPtr);
+					isMatchInput.value	    = "Invalid Regex";
+					matchesInput.value	    = "";
+					groupsList.innerHTML    = "";
+					envVariable.textContent = "";
+					isMatchInput.classList.add("no-match");
+				} else if (result === 0) {
+					isMatchInput.value      = "No";
+					matchesInput.value      = "";
+					groupsList.innerHTML    = "";
+					envVariable.textContent = "";
+					isMatchInput.classList.add("no-match");
+				} else {
+					const subExprCount = ptrToArray(subExprPtr, 1, 4)[0] + 1;
+					const rmSoArray	   = ptrToArray(rmSoPtr, subExprCount, 4);
+					const rmEoArray	   = ptrToArray(rmEoPtr, subExprCount, 4);
+
+					isMatchInput.value = "Yes";
+					matchesInput.value = inputString.substring(rmSoArray[0], rmEoArray[0]);
+
+					let groupsHtml = "";
+					for (let i = 1; i < subExprCount; i++) {
+						const match = inputString.substring(rmSoArray[i], rmEoArray[i]);
+						groupsHtml += `<li>$${i}: ${match}</li>`;
+					}
+					groupsList.innerHTML		= groupsHtml;
+					envVariable.textContent =
+						`Example environment var: EVENT0_MATCH_STR="${regexInput}"`;
+					isMatchInput.classList.remove("no-match");
+				}
+
+				Module._free(rePtr);
+				Module._free(strPtr);
+				Module._free(subExprPtr);
+				Module._free(rmSoPtr);
+				Module._free(rmEoPtr);
+				Module._free(errorMsgPtr);
+			}
+		</script>
+	</body>
+</html>
