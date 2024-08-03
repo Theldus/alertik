@@ -166,11 +166,9 @@ int init_static_events(void)
 		if (!static_events[i].enabled)
 			continue;
 
-		printf(
-			"STATIC_EVENT%d         : enabled\n"
-			"STATIC_EVENT%d_NOTIFIER: %s\n\n",
-			i, i, notifiers_str[static_events[i].ev_notifier_idx]
-		);
+		log_msg("STATIC_EVENT%d         : enabled\n", i);
+		log_msg("STATIC_EVENT%d_NOTIFIER: %s\n\n",
+			i, notifiers_str[static_events[i].ev_notifier_idx]);
 
 		/* Try to setup notifier if not yet. */
 		self = &notifiers[static_events[i].ev_notifier_idx];
