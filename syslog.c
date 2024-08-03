@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #include <time.h>
 
 #include "events.h"
@@ -18,6 +19,10 @@
 /*
  * UDP message handling and FIFO.
  */
+
+/* Forward server data. */
+static struct addrinfo *fwd_addr_info;
+static int fwd_fd;
 
 /* Circular message buffer. */
 static struct circ_buffer {
@@ -65,8 +70,71 @@ int syslog_create_udp_socket(void)
 }
 
 /**
+ * @brief Initializes the forwarding to the syslog server if
+ * the required environment vars were informed.
+ *
+ * @return Returns 0.
+ */
+int syslog_init_forward(void)
+{
+	struct addrinfo hints, *results, *try;
+	char *host, *port;
+	int sock = 0;
+
+	/* Check if we should forward messages. */
+	host = getenv("FORWARD_HOST");
+	port = getenv("FORWARD_PORT");
+	if (!host && !port) {
+		log_msg("Forward Mode: disabled\n\n");
+		return 0;
+	}
+
+	if (!host || !port)
+		panic("FORWARD_ADDR and FORWARD_PORT must be specified!\n");
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family   = AF_UNSPEC;
+	hints.ai_socktype = SOCK_DGRAM;
+
+	if (getaddrinfo(host, port, &hints, &results) != 0)
+		panic_errno("Unable to getaddrinfo...");
+
+	/* Iterate over results. */
+	for (try = results; try != NULL; try = try->ai_next) {
+		sock = socket(try->ai_family, try->ai_socktype, try->ai_protocol);
+		if (sock < 0)
+			continue;
+		break;
+	}
+
+	if (sock < 0)
+		panic("Unable to create a socket for forward...\n");
+
+	fwd_fd = sock;
+	fwd_addr_info = try;
+
+	log_msg("Forward Mode: enabled:\n");
+	log_msg("----------------------\n");
+	log_msg("FORWARD_HOST: %s\n", host);
+	log_msg("FORWARD_PORT: %s\n\n", port);
+	return 0;
+}
+
+/**
+ * @brief Sends a message @p msg of length @p len to the
+ * configured syslog server.
+ */
+static int syslog_fwd_msg(const char *msg, size_t len) {
+	return (
+		sendto(fwd_fd, msg, len, 0, fwd_addr_info->ai_addr,
+			fwd_addr_info->ai_addrlen)
+	);
+}
+
+/**
  * @brief Receives a new UDP message and then adds it
- * to the message queue.
+ * to the message queue. Additionally, also forwards
+ * the message to a previously configured syslog server.
  *
  * @param fd UDP file descriptor to receive from.
  *
@@ -85,6 +153,12 @@ int syslog_enqueue_new_upd_msg(int fd)
 
 	if (ret < 0)
 		return -1;
+
+	/* Forward message if forwarding was configured. */
+	if (fwd_fd) {
+		if (syslog_fwd_msg(msg, ret) < 0)
+			log_errno("Unable to forward message...\n");
+	}
 
 	if (syslog_push_msg_into_fifo(msg, time(NULL)) < 0)
 		panic("Circular buffer full! (size: %d)\n", FIFO_MAX);
