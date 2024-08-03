@@ -60,6 +60,8 @@ int main(void)
 		panic("No event was configured, please configure at least one\n"
 		      "before proceeding!\n");
 
+	syslog_init_forward();
+
 	fd = syslog_create_udp_socket();
 	if (pthread_create(&handler, NULL, handle_messages, NULL))
 		panic_errno("Unable to create hanler thread!");

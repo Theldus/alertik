@@ -27,6 +27,8 @@
 			exit(EXIT_FAILURE); \
 		} while(0);
 
+	#define log_errno(s) log_msg("%s: %s", (s), strerror(errno))
+
 	#define LOG_FILE "log/log.txt"
 
 	extern char *get_formatted_time(time_t time, char *time_str);
