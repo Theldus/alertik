@@ -405,17 +405,14 @@ int init_environment_events(void)
 	}
 
 	log_msg("Environment events summary:\n");
-	for (int i = 0; i < num_env_events; i++) {
-		printf(
-			"EVENT%d_MATCH_TYPE: %s\n"
-			"EVENT%d_MATCH_STR:  %s\n"
-			"EVENT%d_NOTIFIER:   %s\n"
-			"EVENT%d_MASK_MSG:   %s\n\n",
-			i, match_types[env_events[i].ev_match_type],
-			i, env_events[i].ev_match_str,
-			i, notifiers_str[env_events[i].ev_notifier_idx],
-			i, env_events[i].ev_mask_msg
-		);
+	for (int i = 0; i < num_env_events; i++)
+	{
+		log_msg("EVENT%d_MATCH_TYPE: %s\n", i,
+				match_types[env_events[i].ev_match_type]);
+		log_msg("EVENT%d_MATCH_STR:  %s\n", i, env_events[i].ev_match_str);
+		log_msg("EVENT%d_NOTIFIER:   %s\n", i,
+				notifiers_str[env_events[i].ev_notifier_idx]);
+		log_msg("EVENT%d_MASK_MSG:   %s\n\n", i, env_events[i].ev_mask_msg);
 
 		/* Try to setup notifier if not yet. */
 		self = &notifiers[env_events[i].ev_notifier_idx];
