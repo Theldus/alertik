@@ -33,14 +33,40 @@ Instead of trying to parse RouterOS logs in an elaborate way, a smarter approach
 
 Initially, my idea was to create a Docker image based on Alpine, using rsyslogd, bash scripts, and cURL for receiving logs, parsing them, and sending notifications. However, I noticed something interesting: the 'syslog' from RouterOS is simply UDP packets with raw strings, without any headers, protocols, or anything else—just the log string sent in a UDP packet to the configured syslog server.
 
-From this point, it seemed excessive to use Alpine, rsyslog, cURL, and shell scripts. So, I decided to write my own C program in the simplest way possible. The result is *Alertik, a single-file static binary, Docker image of just **355 kB**. It even fits in the ridiculous free space of my hAP ac^2 (1 MiB free)!* (Though I recommend using tmpfs.)
+From this point, it seemed excessive to use Alpine, rsyslog, cURL, and shell scripts. So, I decided to write my own C program in the simplest way possible. The result is *Alertik, a single-file static binary, Docker image of just **395 kB**. It even fits in the ridiculous free space of my hAP ac^2 (1 MiB free)!* (Though I recommend using tmpfs.)
 
-## How Does It Work? How to Use It?
-The operation is quite simple: Alertik listens on the UDP port of your choice (5140 by default) and queues messages in a circular buffer. A second thread then retrieves one message at a time and checks if its substring (or regex, to be implemented) matches a predefined list of handlers. If a match is found, the handler is invoked with the message and the event timestamp. From this point, the user can send notifications to Telegram (or other services, if desired) based on these logs.
+## How Does It Work?
+The operation is quite simple: Alertik listens on the UDP port of your choice (5140 by default) and queues messages in a circular buffer. A second thread then retrieves one message at a time and checks if its substring (or regex) matches a predefined list of handlers. If a match is found, the handler is invoked with the message and the event timestamp. From this point, the user can send notifications to some services (like Telegram, Slack, Discord, and etc) based on these logs.
 
-All of this is packed into a single 355kB binary, thanks to libcurl, BearSSL, and Musl.
+All of this is packed into a single 395kB binary, thanks to libcurl, BearSSL, and Musl.
 
-### How to Use
+## Notifiers
+In Alertik, notifiers are the services used to send the notifications. Each notifier can be configured to handle one or more events, and the system is designed to be extensible, allowing for the addition of more notifiers if needed.
+
+Currently, Alertik supports the following notifiers:
+
+- **Telegram Bot**
+- **Slack WebHook**
+- **Microsoft Teams WebHook**
+- **Discord WebHook**
+- **Generic WebHooks** (4 slots available)
+
+Each notifier is configured via environment variables. Below is the list of environment variables required for configuring each notifier:
+
+| Notifier                   | Environment Variable Name         | Description                                    | Example Value                                                                   |
+|----------------------------|-----------------------------------|------------------------------------------------|---------------------------------------------------------------------------------|
+| **Telegram**               | `TELEGRAM_BOT_TOKEN`              | Token for the Telegram bot.                    | `123456789:ABCdefGHIjklMNO-pQRsTUVwxyz`                                         |
+|                            | `TELEGRAM_CHAT_ID`                | Chat ID where messages will be sent.           | `987654321`                                                                     |
+| **Slack**                  | `SLACK_WEBHOOK_URL`               | WebHook URL for Slack notifications.           | `https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX` |
+| **Microsoft Teams**        | `TEAMS_WEBHOOK_URL`               | WebHook URL for Microsoft Teams notifications. | `https://xxxxx.webhook.office.com/xxxxxxxxx`                                    |
+| **Discord**                | `DISCORD_WEBHOOK_URL`             | WebHook URL for Discord notifications.         | `https://discord.com/api/webhooks/1234567890/abcdefghij`                        |
+| **Generic WebHook 1**      | `GENERIC1_WEBHOOK_URL`            | URL for the first generic webhook.             | `https://example.com/webhook1`                                                  |
+| **Generic WebHook 2**      | `GENERIC2_WEBHOOK_URL`            | URL for the second generic webhook.            | `https://example.com/webhook2`                                                  |
+| **Generic WebHook 3**      | `GENERIC3_WEBHOOK_URL`            | URL for the third generic webhook.             | `https://example.com/webhook3`                                                  |
+| **Generic WebHook 4**      | `GENERIC4_WEBHOOK_URL`            | URL for the fourth generic webhook.            | `https://example.com/webhook4`                                                  |
+
+
+## How to Use
 Using Alertik is straightforward: simply configure your RouterOS to download the latest Docker image from [theldus/alertik:latest](https://hub.docker.com/repository/docker/theldus/alertik/tags) and set/export three environment variables:
 - `TELEGRAM_BOT_TOKEN`: The token for a pre-configured Telegram bot.
 - `TELEGRAM_CHAT_ID`: The chat ID where notifications will be sent.
@@ -180,7 +206,7 @@ armv6-linux-musleabi-gcc -no-pie --static  alertik.o events.o  -pthread -lcurl -
 armv6-linux-musleabi-strip --strip-all alertik
 
 $ ls -lah alertik
--rwxr-xr-x 1 david users 355K Jun  1 01:54 alertik
+-rwxr-xr-x 1 david users 395K Jun  1 01:54 alertik
 ```
 
 To generate the Docker image, ensure you have the [buildx] extension installed:
