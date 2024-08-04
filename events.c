@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "events.h"
-#include "alertik.h"
 #include "notifiers.h"
 #include "log.h"
 #include "str.h"
@@ -17,6 +17,8 @@
 /*
  * Static events
  */
+
+#define MIN(a,b) (((a)<(b))?(a):(b))
 
 /* Misc. */
 #define MAX_MATCHES 32

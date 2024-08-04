@@ -10,7 +10,6 @@
 
 #include "log.h"
 #include "notifiers.h"
-#include "alertik.h"
 #include "str.h"
 
 /*
