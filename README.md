@@ -53,18 +53,22 @@ Currently, Alertik supports the following notifiers:
 
 Each notifier is configured via environment variables. Below is the list of environment variables required for configuring each notifier:
 
-| Notifier                   | Environment Variable Name         | Description                                    | Example Value                                                                   |
-|----------------------------|-----------------------------------|------------------------------------------------|---------------------------------------------------------------------------------|
-| **Telegram**               | `TELEGRAM_BOT_TOKEN`              | Token for the Telegram bot.                    | `123456789:ABCdefGHIjklMNO-pQRsTUVwxyz`                                         |
-|                            | `TELEGRAM_CHAT_ID`                | Chat ID where messages will be sent.           | `987654321`                                                                     |
-| **Slack**                  | `SLACK_WEBHOOK_URL`               | WebHook URL for Slack notifications.           | `https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX` |
-| **Microsoft Teams**        | `TEAMS_WEBHOOK_URL`               | WebHook URL for Microsoft Teams notifications. | `https://xxxxx.webhook.office.com/xxxxxxxxx`                                    |
-| **Discord**                | `DISCORD_WEBHOOK_URL`             | WebHook URL for Discord notifications.         | `https://discord.com/api/webhooks/1234567890/abcdefghij`                        |
-| **Generic WebHook 1**      | `GENERIC1_WEBHOOK_URL`            | URL for the first generic webhook.             | `https://example.com/webhook1`                                                  |
-| **Generic WebHook 2**      | `GENERIC2_WEBHOOK_URL`            | URL for the second generic webhook.            | `https://example.com/webhook2`                                                  |
-| **Generic WebHook 3**      | `GENERIC3_WEBHOOK_URL`            | URL for the third generic webhook.             | `https://example.com/webhook3`                                                  |
-| **Generic WebHook 4**      | `GENERIC4_WEBHOOK_URL`            | URL for the fourth generic webhook.            | `https://example.com/webhook4`                                                  |
+| Notifier                  | Environment Variable Name         | Description                                    |
+|---------------------------|-----------------------------------|------------------------------------------------|
+| **Telegram**              | `TELEGRAM_BOT_TOKEN`              | Token for the Telegram bot.                    |
+|                           | `TELEGRAM_CHAT_ID`                | Chat ID where messages will be sent.           |
+| **Slack**                 | `SLACK_WEBHOOK_URL`               | WebHook URL for Slack notifications.           |
+| **Microsoft Teams**       | `TEAMS_WEBHOOK_URL`               | WebHook URL for Microsoft Teams notifications. |
+| **Discord**               | `DISCORD_WEBHOOK_URL`             | WebHook URL for Discord notifications.         |
+| **Generic WebHook 1**     | `GENERIC1_WEBHOOK_URL`            | URL for the first generic webhook.             |
+| **Generic WebHook 2**     | `GENERIC2_WEBHOOK_URL`            | URL for the second generic webhook.            |
+| **Generic WebHook 3**     | `GENERIC3_WEBHOOK_URL`            | URL for the third generic webhook.             |
+| **Generic WebHook 4**     | `GENERIC4_WEBHOOK_URL`            | URL for the fourth generic webhook.            |
 
+For Generic WebHooks, Alertik sends a POST request with the following JSON content to the configured URL:
+```json
+{"text": "<text to be sent>"}
+```
 
 ## How to Use
 Using Alertik is straightforward: simply configure your RouterOS to download the latest Docker image from [theldus/alertik:latest](https://hub.docker.com/repository/docker/theldus/alertik/tags) and set/export three environment variables:
