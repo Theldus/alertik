@@ -13,7 +13,6 @@
 #include "log.h"
 #include "events.h"
 #include "env_events.h"
-#include "alertik.h"
 #include "notifiers.h"
 #include "str.h"
 

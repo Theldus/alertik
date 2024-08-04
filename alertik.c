@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <pthread.h>
 
-#include "alertik.h"
 #include "events.h"
 #include "env_events.h"
 #include "log.h"
