@@ -70,6 +70,138 @@ For Generic WebHooks, Alertik sends a POST request with the following JSON conte
 {"text": "<text to be sent>"}
 ```
 
+## Environment Events
+**Environment Events** in Alertik offer the simplest way to configure event triggers. By setting a few environment variables, you can easily define how events should work, whether using substring matches or regex patterns. This approach provides a straightforward method for setting up events, and this section will guide you through configuring them with examples for both substring and regex matching.
+
+### Configuration Format
+The environment variables for configuring events follow this format:
+
+```bash
+export ENV_EVENTS="2"  # Maximum of 16 events (starting from 0)
+export EVENT0_NOTIFIER=<notifier>  # Options: Telegram, Slack, Discord, Teams, Generic1 ... Generic4
+export EVENT0_MATCH_TYPE="substr"  # or "regex"
+export EVENT0_MATCH_STR="substring or regex pattern"
+export EVENT0_MASK_MSG="message to be sent in case of match"
+...
+```
+
+In `EVENT0_MASK_MSG`, you can use match groups (up to 32 groups, starting from 1) for custom messages. Use the `@` character to refer to these groups. For example, with a regex pattern:
+
+```regex
+ether2 link up \(speed (.+), full duplex\)
+```
+
+You can use the match group in `MASK_MSG` like this:
+
+```bash
+EVENT0_MASK_MSG="Your link ether2 is up at @1 speed"
+```
+
+To include an actual `@` character in the message, escape it by typing `@@`. For example:
+
+```bash
+EVENT0_MASK_MSG="User @1 and @2 were reported to user @@John"
+```
+
+### Examples: Substring Matching
+#### `1)` **Identify Login Failures**
+
+**Log Message:**
+```
+login failure for user admin
+```
+
+**Configuration:**
+```bash
+export EVENT0_NOTIFIER="Slack"
+export EVENT0_MATCH_TYPE="substr"
+export EVENT0_MATCH_STR="login failure for user admin"
+export EVENT0_MASK_MSG="There is a failed login attempt for user admin"
+```
+
+#### `2)` **Identify WiFi Login Failures**
+
+**Log Message:**
+```
+36:7F:7F:07:C4:B0@honeypot: disconnected, unicast key exchange timeout, signal strength -85
+```
+
+**Configuration:**
+```bash
+export EVENT0_NOTIFIER="Telegram"
+export EVENT0_MATCH_TYPE="substr"
+export EVENT0_MATCH_STR="honeypot: disconnected, unicast key exchange timeout"
+export EVENT0_MASK_MSG="There is an attempt to login into your HoneyPot network!"
+```
+
+### Examples: Regex Matching
+#### `1)` **Identify SSH Login Failures with User and IP Extraction**
+
+**Log Message:**
+```
+login failure for user john_doe from 192.168.1.10 via ssh
+```
+
+**Configuration:**
+```bash
+export EVENT0_NOTIFIER="Discord"
+export EVENT0_MATCH_TYPE="regex"
+export EVENT0_MATCH_STR="login failure for user ([A-Za-z]+) from (\d{1,3}.*) via ssh"
+export EVENT0_MASK_MSG="Alert: failed user attempt to login as @1 from @2"
+```
+
+#### `2)` **Identify Link Up with Speed Less Than 1Gbps**
+
+**Log Message:**
+```
+eth0 link up (speed 100Mbps, full duplex)
+```
+
+**Configuration:**
+```bash
+export EVENT0_NOTIFIER="Teams"
+export EVENT0_MATCH_TYPE="regex"
+export EVENT0_MATCH_STR="([a-zA-Z0-9]+) link up \(speed (\d+Mbps), full duplex\)"
+export EVENT0_MASK_MSG="Your interface @1 is running at @2"
+```
+
+#### `3)` **Log Connection Attempts**
+To monitor and log incoming connection attempts to your network's PCs, you can configure Alertik to detect such events using a custom firewall rule and a regex pattern. Here’s a step-by-step guide on how to achieve this:
+
+**1. Configure the Firewall Rule:**
+First, set up a firewall rule on your router to log each new incoming connection to any of your machines. This rule also ensures that each source IP is added to an 'ignore' list to prevent duplicate logging for one week. Here's how you can add the rule:
+```bash
+/ip/firewall/filter
+add action=add-src-to-address-list address-list=ignore_ip_log \
+    address-list-timeout=1w chain=input comment=\
+    "Log new incoming connections to any of my machines" \
+    connection-nat-state="" connection-state=new in-interface=WANinterface \
+    log=yes src-address-list=!ignore_ip_log
+```
+
+**2. Define the Regex Pattern in Alertik**
+Use the following regex pattern to match log entries for incoming connection attempts. This regex pattern extracts details from the log message, including the source and destination IP addresses and ports:
+```
+input: in:.*src-mac [0-9a-f:]+, proto [^,]+, ((\d{1,3}\.?)+):(\d{1,5})->((\d{1,3}\.?)+):(\d{1,5})
+```
+
+**Log Message:**
+```
+input: in:WANinterface out:(unknown 0), connection-state:new src-mac 18:3d:5e:79:42:a5, proto TCP (SYN), 192.0.2.1:45624->198.51.100.2:80, len 60
+```
+
+**Final Configuration:**
+```bash
+export EVENT0_NOTIFIER="Telegram"
+export EVENT0_MATCH_TYPE="regex"
+export EVENT0_MATCH_STR="input: in:.*src-mac [0-9a-f:]+, proto [^,]+, ((\d{1,3}\.?)+):(\d{1,5})->((\d{1,3}\.?)+):(\d{1,5})"
+export EVENT0_MASK_MSG="The IP @1:@3 is trying to connect to your router @4:@6, please do something"
+```
+
+> [!NOTE]
+> The regex used in Alertik follows the POSIX Regex Extended syntax. This syntax may vary slightly from patterns used in PCRE2/Perl and other regex implementations. For validation of patterns specifically for Alertik, you can use the regex validator at [https://theldus.github.io/alertik](https://theldus.github.io/alertik). Regex patterns that match in this tool are guaranteed to work correctly in Alertik.
+
+
 ## How to Use
 Using Alertik is straightforward: simply configure your RouterOS to download the latest Docker image from [theldus/alertik:latest](https://hub.docker.com/repository/docker/theldus/alertik/tags) and set/export three environment variables:
 - `TELEGRAM_BOT_TOKEN`: The token for a pre-configured Telegram bot.
