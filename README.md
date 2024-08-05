@@ -201,8 +201,107 @@ export EVENT0_MASK_MSG="The IP @1:@3 is trying to connect to your router @4:@6, 
 > [!NOTE]
 > The regex used in Alertik follows the POSIX Regex Extended syntax. This syntax may vary slightly from patterns used in PCRE2/Perl and other regex implementations. For validation of patterns specifically for Alertik, you can use the regex validator at [https://theldus.github.io/alertik](https://theldus.github.io/alertik). Regex patterns that match in this tool are guaranteed to work correctly in Alertik.
 
+## Static Events
+**Static Events** in Alertik offer a more complex event handling mechanism compared to Environment Events. These events are predefined in the source code of Alertik and can support advanced functionalities, such as tracking a certain number of similar events within a specified time window or handling events with specific values.
 
-## How to Use
+Similar to Environment Events, Static Events are configured through environment variables. However, their configuration options are more limited since their core logic is already implemented in the source code.
+
+### Configuration
+To enable and configure Static Events, use the following environment variables:
+
+```bash
+export STATIC_EVENTS_ENABLED="0,3,5..."
+```
+Each number in the list corresponds to a static event that will be enabled.
+
+For each enabled event, specify the notifier to be used:
+
+```bash
+export STATIC_EVENT0_NOTIFIER=Telegram
+export STATIC_EVENT3_NOTIFIER=Telegram
+export STATIC_EVENT5_NOTIFIER=Slack
+...
+```
+
+### Available Static Events
+Currently, there is only one static event available:
+
+- **Event 0: `handle_wifi_login_attempts`**  
+  This event monitors logs for failed login attempts to any Wi-Fi network. When such attempts are detected, the event sends a report containing the Wi-Fi network name and the MAC address of the device.
+
+Future versions of Alertik may include additional static events, and users have the option to add custom events directly in the source code.
+
+### Adding New Static Events
+Adding Static Events can be done in three simple steps. For example, if you want to detect login events and send notifications for them:
+
+```bash
+system,info,account user admin logged in from 10.0.0.245 via winbox
+```
+
+1. Increment the number of events in `events.h`, as shown below:
+```diff
+diff --git a/events.h b/events.h
+index 49b4826..ab5f079 100644
+--- a/events.h
++++ b/events.h
+@@ -10,7 +10,7 @@
+    #include <time.h>
+ 
+    #define MSG_MAX  2048
+-   #define NUM_EVENTS  1
++   #define NUM_EVENTS  2
+```
+
+2. Add your event handler to the list of handlers, along with the substring to be searched:
+```diff
+diff --git a/events.c b/events.c
+index ce20e38..c289dc3 100644
+--- a/events.c
++++ b/events.c
+@@ -26,6 +26,7 @@ static regmatch_t pmatch[MAX_MATCHES];
+ 
+ /* Handlers. */
+ static void handle_wifi_login_attempts(struct log_event *, int);
++static void handle_admin_login(struct log_event *, int);
+ struct static_event static_events[NUM_EVENTS] = {
+    /* Failed login attempts. */
+    {
+@@ -36,6 +37,11 @@ struct static_event static_events[NUM_EVENTS] = {
+        .ev_notifier_idx = NOTIFY_IDX_TELE
+    },
+    /* Add new handlers here. */
++   {
++       .ev_match_str  = "user admin logged in from",
++       .hnd           = handle_admin_login,
++       .ev_match_type = EVNT_SUBSTR
++   }
+ };
+```
+
+3. Add your handler (since Alertik uses libcurl, you can also easily adapt the code to send GET/POST requests to any other similar service):
+```c
+static void handle_admin_login(struct log_event *ev, int idx_env)
+{
+    struct notifier *self;
+    int notif_idx;
+
+    log_msg("Event message: %s\n", ev->msg);
+    log_msg("Event timestamp: %d\n", ev->timestamp);
+
+    notif_idx = static_events[idx_env].ev_notifier_idx;
+    self      = &notifiers[notif_idx];
+
+    if (self->send_notification(self, ev->msg) < 0) {
+        log_msg("unable to send the notification!\n");
+        return;
+    }
+}
+```
+
+## Forward Mode
+<detail here>
+
+## Setup in RouterOS
 Using Alertik is straightforward: simply configure your RouterOS to download the latest Docker image from [theldus/alertik:latest](https://hub.docker.com/repository/docker/theldus/alertik/tags) and set/export three environment variables:
 - `TELEGRAM_BOT_TOKEN`: The token for a pre-configured Telegram bot.
 - `TELEGRAM_CHAT_ID`: The chat ID where notifications will be sent.
@@ -263,64 +362,6 @@ Every step described above is the same process for any Docker image to be used o
 - [Impossible, docker containers on Mikrotik? Part 1](https://www.youtube.com/watch?v=8u1PVouAGnk)
 - [Docker containers on Mikrotik? Part 2: PiHole](https://www.youtube.com/watch?v=UMcJs4oyHDk)
 - [Temporary container in the RAM (tmpfs) - a lifehack for low-cost MikroTik routers](https://www.youtube.com/watch?v=KO9wbarVPOk)
-
-## Adding New Events
-By default, Alertik monitors only WiFi connection attempts, which are reported in the log as follows:
-```bash
-wireless,info AA:BB:CC:DD:EE:FF@yourwifi: disconnected, unicast key exchange timeout, signal strength -77
-```
-
-Whenever there is a timeout during the key exchange, it indicates an authentication attempt with an invalid password. Alertik will notify you via Telegram, as configured in the environment variables in the previous section.
-
-However, it is straightforward to add new events in three simple steps. For example, if you want to detect login events and send notifications for them:
-```bash
-system,info,account user admin logged in from 10.0.0.245 via winbox
-```
-
-1. Increment the number of events in `events.h`, as shown below:
-```diff
-diff --git a/events.h b/events.h
-index 9167567..42d4d5f 100644
---- a/events.h
-+++ b/events.h
-@@ -9,7 +9,7 @@
-    #include <time.h>
-
-    #define MSG_MAX  2048
--   #define NUM_EVENTS  1
-+   #define NUM_EVENTS  2
-```
-
-2. Add your event handler to the list of handlers, along with the substring to be searched:
-```diff
-diff --git a/events.c b/events.c
-index 0eb3880..4e746f0 100644
---- a/events.c
-+++ b/events.c
-@@ -19,6 +19,11 @@ struct ev_handler handlers[NUM_EVENTS] = {
-        .evnt_type = EVNT_SUBSTR
-    },
-    /* Add new handlers here. */
-+   {
-+       .str = "user admin logged in from",
-+       .hnd = handle_admin_login,
-+       .evnt_type = EVNT_SUBSTR
-+   }
- };
-```
-
-3. Add your handler, which sends a notification via Telegram (since Alertik uses libcurl, you can also easily adapt the code to send GET/POST requests to any other similar service):
-```c
-void handle_admin_login(struct log_event *ev) {
-    printf("Event message: %s\n", ev->msg);
-    printf("Event timestamp: %jd\n", (intmax_t)ev->timestamp);
-
-    if (send_telegram_notification(ev->msg) < 0) {
-        log_msg("unable to send the notification!\n");
-        return;
-    }
-}
-```
 
 ## Build Instructions
 The easiest and recommended way to build Alertik is via the Docker image available at: [theldus/alertik:latest], compatible with armv6, armv7, and aarch64. However, if you prefer to build it manually, the process is straightforward since the toolchain setup is already fully scripted:
