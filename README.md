@@ -437,7 +437,7 @@ WARNING: No output specified with docker-container driver. Build result will onl
 ## Security Notice
 Running a Docker image on your router can be a cause for concern. It is not advisable to blindly trust readily available Docker images, especially when it comes to sensitive devices like routers. With this in mind, all Docker images provided in this repository are exclusively pushed to Dockerhub via Github Actions. This means you can audit the entire process from start to finish, ensuring that the downloaded Docker images are exactly as they claim to be.
 
-Incidents like the one involving libxz must not be repeated. Trust should not be placed in manual uploads, whether of binaries or source code, when there are available alternatives.
+[Incidents like the one involving libxz](https://tukaani.org/xz-backdoor/) must not be repeated. Trust should not be placed in manual uploads, whether of binaries or source code, when there are available alternatives.
 
 ## Contributing
 Alertik is always open to the community and willing to accept contributions, whether with issues, documentation, testing, new features, bugfixes, typos, and etc. Welcome aboard.
