@@ -312,10 +312,7 @@ export FORWARD_PORT=<port>
 - **`FORWARD_PORT`**: Define the port number on which the syslog server is listening for incoming messages.
 
 ## Setup in RouterOS
-Using Alertik is straightforward: simply configure your RouterOS to download the latest Docker image from [theldus/alertik:latest](https://hub.docker.com/repository/docker/theldus/alertik/tags) and set/export three environment variables:
-- `TELEGRAM_BOT_TOKEN`: The token for a pre-configured Telegram bot.
-- `TELEGRAM_CHAT_ID`: The chat ID where notifications will be sent.
-- `TELEGRAM_NICKNAME`: The nickname you wish to be called.
+Using Alertik is straightforward: simply configure your RouterOS to download the latest Docker image from [theldus/alertik:latest](https://hub.docker.com/repository/docker/theldus/alertik/tags) and set/export the environment variables related to the Notifiers and Environment/Static Events you want to configure.
 
 <details><summary>The general procedure is similar for any Docker image (click to expand):</summary>
 
@@ -325,7 +322,7 @@ Using Alertik is straightforward: simply configure your RouterOS to download the
 - Configure the IP for the syslog server.
 - Select the topics to be sent to the syslog server.
 - Configure a mount point for the Alertik logs: /tmpfs/log -> /log
-- Set the environment variables listed above.
+- Set the environment variables for Notifiers and Environment/Static Events.
 - Configure the Docker registry to: `https://registry-1.docker.io`
 - Finally, add the Docker image, pointing to: `theldus/alertik:latest`.
 
@@ -345,11 +342,20 @@ Below is the complete configuration for my environment, for reference:
 /system logging action add name=rsyslog remote=<your-container-ip> remote-port=5140 target=remote
 # Mountpoint configuration
 /container mounts add dst=/log name=logmount src=/tmpfs/log
-# Docker environment variables configuration
+
+# Docker environment variables configuration for Telegram/Slack/Discord/Teams and/or Generic events
 /container envs
 add key=TELEGRAM_BOT_TOKEN name=alertik value=<my-bot-token>
-add key=TELEGRAM_CHAT_ID name=alertik value=<my-chat-id>
 add key=TELEGRAM_NICKNAME name=alertik value=<my-nickname>
+...
+
+# Add some event, such as identifying login failures via SSH
+/container envs
+add key=EVENT0_NOTIFIER name=alertik value="Telegram"
+add key EVENT0_MATCH_TYPE name=alertik value="substr"
+add key EVENT0_MATCH_STR name=alertik value=="login failure for user admin"
+add key EVENT0_MASK_MSG name=alertik value="There is a failed login attempt for user admin"
+
 # Docker Hub registry configuration
 /container config set registry-url=https://registry-1.docker.io tmpdir=tmpfs
 ```
