@@ -404,13 +404,18 @@ $ export PATH=$PATH:$PWD/toolchain/armv6-linux-musleabi-cross/bin
 
 # Build
 $ make CROSS=armv6
-armv6-linux-musleabi-gcc -Wall -Wextra -DUSE_FILE_AS_LOG  -DGIT_HASH=\"1536d63\"   -c -o alertik.o alertik.c
-armv6-linux-musleabi-gcc -Wall -Wextra -DUSE_FILE_AS_LOG  -DGIT_HASH=\"1536d63\"   -c -o events.o events.c
-armv6-linux-musleabi-gcc -no-pie --static  alertik.o events.o  -pthread -lcurl -lbearssl -o alertik
+armv6-linux-musleabi-gcc -Wall -Wextra -O2 -DUSE_FILE_AS_LOG  -DGIT_HASH=\"4e82617\"   -c -o alertik.o alertik.c
+armv6-linux-musleabi-gcc -Wall -Wextra -O2 -DUSE_FILE_AS_LOG  -DGIT_HASH=\"4e82617\"   -c -o events.o events.c
+armv6-linux-musleabi-gcc -Wall -Wextra -O2 -DUSE_FILE_AS_LOG  -DGIT_HASH=\"4e82617\"   -c -o env_events.o env_events.c
+armv6-linux-musleabi-gcc -Wall -Wextra -O2 -DUSE_FILE_AS_LOG  -DGIT_HASH=\"4e82617\"   -c -o notifiers.o notifiers.c
+armv6-linux-musleabi-gcc -Wall -Wextra -O2 -DUSE_FILE_AS_LOG  -DGIT_HASH=\"4e82617\"   -c -o log.o log.c
+armv6-linux-musleabi-gcc -Wall -Wextra -O2 -DUSE_FILE_AS_LOG  -DGIT_HASH=\"4e82617\"   -c -o syslog.o syslog.c
+armv6-linux-musleabi-gcc -Wall -Wextra -O2 -DUSE_FILE_AS_LOG  -DGIT_HASH=\"4e82617\"   -c -o str.o str.c
+armv6-linux-musleabi-gcc -no-pie --static  alertik.o events.o env_events.o notifiers.o log.o syslog.o str.o  -pthread -lcurl -lbearssl -o alertik
 armv6-linux-musleabi-strip --strip-all alertik
 
 $ ls -lah alertik
--rwxr-xr-x 1 david users 395K Jun  1 01:54 alertik
+-rwxr-xr-x 1 david users 395K Aug  5 22:39 alertik
 ```
 
 To generate the Docker image, ensure you have the [buildx] extension installed:
