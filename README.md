@@ -346,7 +346,7 @@ Below is the complete configuration for my environment, for reference:
 # Docker environment variables configuration for Telegram/Slack/Discord/Teams and/or Generic events
 /container envs
 add key=TELEGRAM_BOT_TOKEN name=alertik value=<my-bot-token>
-add key=TELEGRAM_NICKNAME name=alertik value=<my-nickname>
+add key=TELEGRAM_CHAT_ID name=alertik value=<my-chat-id>
 ...
 
 # Add some event, such as identifying login failures via SSH
