@@ -379,6 +379,17 @@ Every step described above is the same process for any Docker image to be used o
 - [Docker containers on Mikrotik? Part 2: PiHole](https://www.youtube.com/watch?v=UMcJs4oyHDk)
 - [Temporary container in the RAM (tmpfs) - a lifehack for low-cost MikroTik routers](https://www.youtube.com/watch?v=KO9wbarVPOk)
 
+### Logging
+Logging is the primary method for debugging Alertik. The system logs all operations, and any issues are likely to be reflected in the log file. To retrieve the log file, copy from the RouterOS to your local computer:
+
+```bash
+$ scp admin@<router-ip>:/tmpfs/log/log.txt .
+```
+
+(Detailed instructions on creating a mount-point with `tmpfs` were provided earlier.)
+
+Although not main purpose, Alertik logs can also serve as a replacement for the default RouterOS logs, bypassing limitations such as the default message count restriction.
+
 ## Build Instructions
 The easiest and recommended way to build Alertik is via the Docker image available at: [theldus/alertik:latest], compatible with armv6, armv7, and aarch64. However, if you prefer to build it manually, the process is straightforward since the toolchain setup is already fully scripted:
 ```bash
