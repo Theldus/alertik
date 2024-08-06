@@ -71,7 +71,7 @@ For Generic WebHooks, Alertik sends a POST request with the following JSON conte
 ```
 
 ## Environment Events
-**Environment Events** in Alertik offer the simplest way to configure event triggers. By setting a few environment variables, you can easily define how events should work, whether using substring matches or regex patterns. This approach provides a straightforward method for setting up events, and this section will guide you through configuring them with examples for both substring and regex matching.
+**Environment Events** offer the simplest way to configure event triggers. By setting a few environment variables, you can easily define how events should work, whether using substring matches or regex patterns. This approach provides a straightforward method for setting up events, and this section will guide you through configuring them with examples for both substring and regex matching.
 
 ### Configuration Format
 The environment variables for configuring events follow this format:
@@ -179,7 +179,7 @@ add action=add-src-to-address-list address-list=ignore_ip_log \
     log=yes src-address-list=!ignore_ip_log
 ```
 
-**2. Define the Regex Pattern in Alertik**
+**2. Define the Regex Pattern**
 Use the following regex pattern to match log entries for incoming connection attempts. This regex pattern extracts details from the log message, including the source and destination IP addresses and ports:
 ```
 input: in:.*src-mac [0-9a-f:]+, proto [^,]+, ((\d{1,3}\.?)+):(\d{1,5})->((\d{1,3}\.?)+):(\d{1,5})
@@ -202,7 +202,7 @@ export EVENT0_MASK_MSG="The IP @1:@3 is trying to connect to your router @4:@6, 
 > The regex used in Alertik follows the POSIX Regex Extended syntax. This syntax may vary slightly from patterns used in PCRE2/Perl and other regex implementations. For validation of patterns specifically for Alertik, you can use the regex validator at [https://theldus.github.io/alertik](https://theldus.github.io/alertik). Regex patterns that match in this tool are guaranteed to work correctly in Alertik.
 
 ## Static Events
-**Static Events** in Alertik offer a more complex event handling mechanism compared to Environment Events. These events are predefined in the source code of Alertik and can support advanced functionalities, such as tracking a certain number of similar events within a specified time window or handling events with specific values.
+**Static Events** offer a more complex event handling mechanism compared to Environment Events. These events are predefined in the source code of Alertik and can support advanced functionalities, such as tracking a certain number of similar events within a specified time window or handling events with specific values.
 
 Similar to Environment Events, Static Events are configured through environment variables. However, their configuration options are more limited since their core logic is already implemented in the source code.
 
@@ -299,7 +299,17 @@ static void handle_admin_login(struct log_event *ev, int idx_env)
 ```
 
 ## Forward Mode
-<detail here>
+**Forward Mode** is designed for scenarios where an existing syslog server is already in use with RouterOS. This feature allows Alertik to forward received log messages without any modifications to a specified syslog server. This is particularly useful for integrating Alertik into an existing logging infrastructure while still benefiting from its event-triggering capabilities.
+
+To enable Forward Mode, configure the following environment variables:
+
+```bash
+export FORWARD_HOST=<host>
+export FORWARD_PORT=<port>
+```
+
+- **`FORWARD_HOST`**: Specify the IP address (IPv4 or IPv6) or domain name of the syslog server to which messages should be forwarded.
+- **`FORWARD_PORT`**: Define the port number on which the syslog server is listening for incoming messages.
 
 ## Setup in RouterOS
 Using Alertik is straightforward: simply configure your RouterOS to download the latest Docker image from [theldus/alertik:latest](https://hub.docker.com/repository/docker/theldus/alertik/tags) and set/export three environment variables:
