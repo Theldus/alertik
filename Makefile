@@ -4,7 +4,7 @@
 #
 
 CC      ?= cc
-CFLAGS  += -Wall -Wextra
+CFLAGS  += -Wall -Wextra -O2
 LDLIBS  += -pthread -lcurl
 STRIP    = strip
 VERSION  = v0.1
