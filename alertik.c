@@ -46,6 +46,7 @@ static void *handle_messages(void *p)
 int main(void)
 {
 	pthread_t handler;
+	int ret;
 	int fd;
 
 	log_init();
@@ -55,7 +56,9 @@ int main(void)
 	log_msg("     (https://github.com/Theldus/alertik)\n");
 	log_msg("-------------------------------------------------\n");
 
-	if (!init_static_events() && !init_environment_events())
+	ret  = init_static_events();
+	ret += init_environment_events();
+	if (!ret)
 		panic("No event was configured, please configure at least one\n"
 		      "before proceeding!\n");
 
