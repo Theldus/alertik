@@ -170,6 +170,8 @@ To monitor and log incoming connection attempts to your network's PCs, you can c
 
 **1. Configure the Firewall Rule:**
 First, set up a firewall rule on your router to log each new incoming connection to any of your machines. This rule also ensures that each source IP is added to an 'ignore' list to prevent duplicate logging for one week. Here's how you can add the rule:
+
+_a) Detect incoming connections to your router:_
 ```bash
 /ip/firewall/filter
 add action=add-src-to-address-list address-list=ignore_ip_log \
@@ -178,16 +180,34 @@ add action=add-src-to-address-list address-list=ignore_ip_log \
     connection-nat-state="" connection-state=new in-interface=WANinterface \
     log=yes src-address-list=!ignore_ip_log
 ```
+The interesting thing about this rule is that it will detect all connection attempts to your router, regardless of whether those ports are open or not!
+
+_b) Detects connections that have NAT configured for your machines_
+```bash
+/ip/firewall/filter
+add action=add-src-to-address-list address-list=ign_ip_log address-list-timeout=\
+    1w chain=forward comment=\
+    "Log new incomming connections to any of my NATed machines" \
+    connection-nat-state=dstnat connection-state=new in-interface=WANinterface \
+    log=yes src-address-list=!ign_ip_log
+```
+
+This rule is especially important as it detects potential attempts to connect to your machines.
 
 **2. Define the Regex Pattern**
 Use the following regex pattern to match log entries for incoming connection attempts. This regex pattern extracts details from the log message, including the source and destination IP addresses and ports:
 ```
 input: in:.*src-mac [0-9a-f:]+, proto [^,]+, ((\d{1,3}\.?)+):(\d{1,5})->((\d{1,3}\.?)+):(\d{1,5})
 ```
+and
+```
+forward: in:.*src-mac [0-9a-f:]+, proto [^,]+, ((\d{1,3}\.?)+):(\d{1,5})->((\d{1,3}\.?)+):(\d{1,5})
+```
 
-**Log Message:**
+**Log Messages Examples:**
 ```
 input: in:WANinterface out:(unknown 0), connection-state:new src-mac 18:3d:5e:79:42:a5, proto TCP (SYN), 192.0.2.1:45624->198.51.100.2:80, len 60
+forward: in:WANinterface out:mybridge, connection-state:new,dnat src-mac 18:3d:5e:79:42:a5, proto TCP (SYN), 34.148.164.203:47202->10.0.0.4:22, NAT 34.148.164.203:47202->(192.168.100.30:30292->10.0.0.4:22), len 60
 ```
 
 **Final Configuration:**
@@ -196,6 +216,11 @@ export EVENT0_NOTIFIER="Telegram"
 export EVENT0_MATCH_TYPE="regex"
 export EVENT0_MATCH_STR="input: in:.*src-mac [0-9a-f:]+, proto [^,]+, ((\d{1,3}\.?)+):(\d{1,5})->((\d{1,3}\.?)+):(\d{1,5})"
 export EVENT0_MASK_MSG="The IP @1:@3 is trying to connect to your router @4:@6, please do something"
+
+export EVENT1_NOTIFIER="Telegram"
+export EVENT1_MATCH_TYPE="regex"
+export EVENT1_MATCH_STR="forward: in:.*src-mac [0-9a-f:]+, proto [^,]+, ((\d{1,3}\.?)+):(\d{1,5})->((\d{1,3}\.?)+):(\d{1,5})"
+export EVENT1_MASK_MSG="The IP @1:@3 is trying to connect to one of your machines @4:@6, please do something"
 ```
 
 > [!NOTE]
