@@ -139,15 +139,19 @@ error:
 static int setopts_post_json_curl(CURL *hnd, const char *url,
 	const char *json_payload, struct curl_slist **slist)
 {
-	struct curl_slist *s  = *slist;
+	struct curl_slist *s;
+	struct curl_slist *tmp;
 
 	s = NULL;
 	s = curl_slist_append(s, "Content-Type: application/json");
-	s = curl_slist_append(s, "Accept: application/json");
-	if (!s) {
-		*slist = s;
+	if (!s)
+		return 1;
+	tmp = curl_slist_append(s, "Accept: application/json");
+	if (!tmp) {
+		curl_slist_free_all(s);
 		return 1;
 	}
+	s = tmp;
 
 	curl_easy_setopt(hnd, CURLOPT_HTTPHEADER,    s);
 	curl_easy_setopt(hnd, CURLOPT_URL,         url);
@@ -195,21 +199,29 @@ static int send_generic_webhook(const char *url, const char *text)
 	 */
 	for (t = text; *t != '\0'; t++) {
 		if (*t != '"') {
-			if (ab_append_chr(&payload_data, *t) < 0)
+			if (ab_append_chr(&payload_data, *t) < 0) {
+				do_curl_cleanup(hnd, NULL, s);
 				return 1;
+			}
 		}
 		else {
-			if (ab_append_str(&payload_data, "\\\"", 2) < 0)
+			if (ab_append_str(&payload_data, "\\\"", 2) < 0) {
+				do_curl_cleanup(hnd, NULL, s);
 				return 1;
+			}
 		}
 	}
 
 	/* End the string. */
-	if (ab_append_str(&payload_data, "\"}", 2) < 0)
+	if (ab_append_str(&payload_data, "\"}", 2) < 0) {
+		do_curl_cleanup(hnd, NULL, s);
 		return 1;
+	}
 
-	if (setopts_post_json_curl(hnd, url, payload_data.buff, &s))
+	if (setopts_post_json_curl(hnd, url, payload_data.buff, &s)) {
+		do_curl_cleanup(hnd, NULL, s);
 		return 1;
+	}
 
 	log_msg("> Sending notification!\n");
 	return do_curl(hnd, NULL, s);
@@ -263,6 +275,7 @@ static int send_telegram_notification(const struct notifier *self, const char *m
 	if (!escaped_msg) {
 		log_msg("> Unable to escape notification message...\n");
 		do_curl_cleanup(hnd, escaped_msg, NULL);
+		return -1;
 	}
 
 	ab_init(&full_request_url);
@@ -271,8 +284,10 @@ static int send_telegram_notification(const struct notifier *self, const char *m
 		"https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s",
 		telegram_bot_token, telegram_chat_id, escaped_msg);
 
-	if (ret)
+	if (ret) {
+		do_curl_cleanup(hnd, escaped_msg, NULL);
 		return -1;
+	}
 
 	setopts_get_curl(hnd, full_request_url.buff);
 	log_msg("> Sending notification!\n");
