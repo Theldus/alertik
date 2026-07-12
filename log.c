@@ -21,7 +21,7 @@
  */
 
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int curr_file;
+static int curr_file = -1;
 
 /* There should *always* be a corresponding close_log_file() call. */
 static inline void open_log_file(void)
@@ -45,13 +45,14 @@ static inline void open_log_file(void)
 /* This should *always* be called *after* a call to open_log_file(). */
 static void close_log_file(void)
 {
-		if (curr_file || curr_file == STDOUT_FILENO)
-			goto out;
+	if (curr_file >= 0 && curr_file != STDOUT_FILENO) {
 		fsync(curr_file);
 		close(curr_file);
-out:
+		curr_file = -1;
+	}
 	pthread_mutex_unlock(&log_mutex);
 }
+
 
 /**
  * @brief Format the current time passed as @p time
@@ -111,7 +112,6 @@ void print_log_event(struct log_event *ev)
  * @brief Initializes the logging routines.
  */
 void log_init(void) {
-	atexit(close_log_file);
 #ifndef USE_FILE_AS_LOG
 	curr_file = STDOUT_FILENO;
 #endif
