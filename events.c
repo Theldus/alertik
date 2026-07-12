@@ -106,7 +106,7 @@ int process_static_event(struct log_event *ev)
 		}
 
 		else {
-			if (regexec(&sta_ev->regex, ev->msg, MAX_MATCHES, pmatch, 0)) {
+			if (!regexec(&sta_ev->regex, ev->msg, MAX_MATCHES, pmatch, 0)) {
 				static_events[i].hnd(ev, i);
 				handled += 1;
 			}
