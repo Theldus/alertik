@@ -177,7 +177,7 @@ static int setopts_post_json_curl(CURL *hnd, const char *url,
  * @param url  Target webhook URL.
  * @param text Text to be sent in the json payload.
  *
- * @return Returns CURLE_OK if success, 1 if error.
+ * @return Returns 0 on success, -1 if error.
  */
 static int send_generic_webhook(const char *url, const char *text)
 {
@@ -188,7 +188,7 @@ static int send_generic_webhook(const char *url, const char *text)
 
 	if (!(hnd = curl_easy_init())) {
 		log_msg("Failed to initialize libcurl!\n");
-		return 1;
+		return -1;
 	}
 
 	ab_init(&payload_data);
@@ -201,13 +201,13 @@ static int send_generic_webhook(const char *url, const char *text)
 		if (*t != '"') {
 			if (ab_append_chr(&payload_data, *t) < 0) {
 				do_curl_cleanup(hnd, NULL, s);
-				return 1;
+				return -1;
 			}
 		}
 		else {
 			if (ab_append_str(&payload_data, "\\\"", 2) < 0) {
 				do_curl_cleanup(hnd, NULL, s);
-				return 1;
+				return -1;
 			}
 		}
 	}
@@ -215,16 +215,16 @@ static int send_generic_webhook(const char *url, const char *text)
 	/* End the string. */
 	if (ab_append_str(&payload_data, "\"}", 2) < 0) {
 		do_curl_cleanup(hnd, NULL, s);
-		return 1;
+		return -1;
 	}
 
 	if (setopts_post_json_curl(hnd, url, payload_data.buff, &s)) {
 		do_curl_cleanup(hnd, NULL, s);
-		return 1;
+		return -1;
 	}
 
 	log_msg("> Sending notification!\n");
-	return do_curl(hnd, NULL, s);
+	return do_curl(hnd, NULL, s) != 0 ? -1 : 0;
 }
 
 
@@ -291,7 +291,7 @@ static int send_telegram_notification(const struct notifier *self, const char *m
 
 	setopts_get_curl(hnd, full_request_url.buff);
 	log_msg("> Sending notification!\n");
-	return do_curl(hnd, escaped_msg, NULL);
+	return do_curl(hnd, escaped_msg, NULL) != 0 ? -1 : 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -331,7 +331,7 @@ static int send_discord_notification(
 	struct str_ab url;
 	ab_init(&url);
 	if (ab_append_fmt(&url, "%s/slack", data->webhook_url) < 0)
-		return 1;
+		return -1;
 	return send_generic_webhook(url.buff, msg);
 }
 
