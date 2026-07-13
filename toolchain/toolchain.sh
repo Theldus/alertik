@@ -17,13 +17,19 @@ export MUSL_PREFIX="$CURDIR/armv6-linux-musleabi-cross/armv6-linux-musleabi"
 
 # Misc
 MUSL_ARMv6_LINK="https://musl.cc/armv6-linux-musleabi-cross.tgz"
+MUSL_ARMv6_LINK_ALT="https://download.wireguard.com/qemu-test/toolchains/20240917/armv6-linux-musleabi-cross.tgz"
 CURL_LINK="https://github.com/curl/curl/releases/download/curl-8_8_0/curl-8.8.0.tar.xz"
 BEARSSL_REPO="https://www.bearssl.org/git/BearSSL"
 BEARSSL_HASH="79c060eea3eea1257797f15ea1608a9a9923aa6f"
 
 download_musl_armv6() {
+	set +e
 	echo "[+] Downloading musl ..."
-	wget "$MUSL_ARMv6_LINK" -O armv6-musl.tgz
+	wget --timeout=10 "$MUSL_ARMv6_LINK" -O armv6-musl.tgz
+	if [[ $? != 0 ]]; then
+		wget --timeout=10 "$MUSL_ARMv6_LINK_ALT" -O armv6-musl.tgz
+	fi
+	set -e
 	tar xvf armv6-musl.tgz
 	popd
 }
